@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 3.0)
 project (Tutorials)
 
 find_package(OpenGL REQUIRED)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
 if( CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR )
