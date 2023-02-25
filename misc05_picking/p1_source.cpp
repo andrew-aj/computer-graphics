@@ -139,7 +139,7 @@ std::vector<Vertex> Lines[NumObjects - 2];
 
 int SubLevel = 0;
 int NumSubVerts = IndexCount * std::exp2(SubLevel);
-const int sz = 10;
+const int sz = 100;
 
 // ATTN: DON'T FORGET TO INCREASE THE ARRAY SIZE IN THE PICKING VERTEX SHADER WHEN YOU ADD MORE PICKING COLORS
 float pickingColor[IndexCount];
@@ -265,7 +265,6 @@ void initOpenGL(void) {
 	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
 	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
 	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
-	std::cout << "here" << std::endl;
 }
 
 // this actually creates the VAO (structure) and the VBO (vertex data buffer)
@@ -312,22 +311,27 @@ void createVAOs(Vertex Vertices[], GLushort Indices[], size_t BufferSize, size_t
 	}
 }
 
+
+
 void dcAlg() {
+	float arr[4];
+	point cs[3];
 	for(int index = 0; index < IndexCount; index++) {
 		for(int j = 0; j <= sz; j++) {
 			float t = j / (double)sz;
-			point cs[3] = {BBCoeff[index].Position, Vertices[index].Position, BBCoeff[index % IndexCount].Position};
+			cs[0] = point(BBCoeff[index].Position);
+			cs[1] = point(Vertices[index].Position);
+			cs[2] = point(BBCoeff[index % IndexCount].Position);
 
-			for(int l = 1; l <= sz; l++) {
-				for(int i = 0; i <= sz - l; i++) {
-					cs[i] = cs[i] * (1 - t) + cs[i + 1] * t;
+			for(int l = 1; l < 3; l++) {
+				for(int i = 0; i < 3 - l; i++) {
+					cs[i] = (cs[i] * (1 - t)) + (cs[i + 1] * t);
 				}
 			}
 
-			float arr[4];
 			cs[0].toArray(arr);
-			std::cout << (index * IndexCount) + j << std::endl;
-			Lines[2][index * IndexCount + j].SetCoords(arr);
+			Lines[2][index * (sz + 1) + j].SetCoords(arr);
+			std::cout << arr[0] << " " << arr[1] << " " << arr[2] << " " << arr[3] << std::endl;
 		}
 	}
 }
