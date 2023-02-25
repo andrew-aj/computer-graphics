@@ -321,7 +321,7 @@ void dcAlg() {
 			float t = j / (double)sz;
 			cs[0] = point(BBCoeff[index].Position);
 			cs[1] = point(Vertices[index].Position);
-			cs[2] = point(BBCoeff[index % IndexCount].Position);
+			cs[2] = point(BBCoeff[(index + 1) % IndexCount].Position);
 
 			for(int l = 1; l < 3; l++) {
 				for(int i = 0; i < 3 - l; i++) {
@@ -331,7 +331,6 @@ void dcAlg() {
 
 			cs[0].toArray(arr);
 			Lines[2][index * (sz + 1) + j].SetCoords(arr);
-			std::cout << arr[0] << " " << arr[1] << " " << arr[2] << " " << arr[3] << std::endl;
 		}
 	}
 }
@@ -521,7 +520,6 @@ void pickVertex(void) {
 
 void restoreVertex(void) {
 	if(gPickedIndex < IndexCount) {
-		std::cout << "picked" << std::endl;
 		for(int i = 0; i < 4; i++) {
 			Vertices[gPickedIndex].Color[i] = oldColor[i];
 		}
@@ -580,6 +578,7 @@ void moveVertex(void) {
 
 			subdivide();
 			updateBBCoeff();
+			dcAlg();
 
 			createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
 			createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
@@ -589,6 +588,8 @@ void moveVertex(void) {
 		}
 	}
 }
+
+bool hideBB = false;
 
 void renderScene(void) {    
 	// Dark blue background
@@ -615,14 +616,18 @@ void renderScene(void) {
 		// // If don't use indices
 		// glDrawArrays(GL_POINTS, 0, NumVerts[0]);
 		for(int i = 1; i < NumObjects - 1; i++) {
-			glBindVertexArray(VertexArrayId[i]);
-			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
-			glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+			if(i != 3 || !hideBB) {
+				glBindVertexArray(VertexArrayId[i]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
+				glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+			}
 		}
 
-		glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
-		glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
-		glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+		if(!hideBB){
+			glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
+			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
+			glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+		}
 
 		// ATTN: OTHER BINDING AND DRAWING COMMANDS GO HERE
 		// one set per object:
@@ -667,6 +672,7 @@ static void mouseCallback(GLFWwindow* window, int button, int action, int mods) 
 }
 
 bool notPressed = true;
+bool notPressed2 = true;
 
 int main(void) {
 	// ATTN: REFER TO https://learnopengl.com/Getting-started/Creating-a-window
@@ -708,6 +714,13 @@ int main(void) {
 			notPressed = false;
 		}else if(glfwGetKey(window, GLFW_KEY_1) == GLFW_RELEASE) {
 			notPressed = true;
+		}
+
+		if(glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS && notPressed2) {
+			hideBB = !hideBB;
+			notPressed2 = false;
+		} else if(glfwGetKey(window, GLFW_KEY_2) == GLFW_RELEASE){
+			notPressed2 = true;
 		}
 		// for respective tasks
 
