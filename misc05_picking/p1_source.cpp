@@ -317,21 +317,21 @@ void createVAOs(Vertex Vertices[], GLushort Indices[], size_t BufferSize, size_t
 
 void dcAlg() {
 	float arr[4];
-	point cs[3];
 	for(int index = 0; index < IndexCount; index++) {
 		for(int j = 0; j <= sz; j++) {
 			float t = j / (double)sz;
-			cs[0] = point(BBCoeff[index].Position);
-			cs[1] = point(Vertices[index].Position);
-			cs[2] = point(BBCoeff[(index + 1) % IndexCount].Position);
+			point cs[3][3];
+			cs[2][0] = point(BBCoeff[index].Position);
+			cs[1][1] = point(Vertices[index].Position);
+			cs[0][2] = point(BBCoeff[(index + 1) % IndexCount].Position);
 
 			for(int l = 1; l < 3; l++) {
 				for(int i = 0; i < 3 - l; i++) {
-					cs[i] = (cs[i] * (1 - t)) + (cs[i + 1] * t);
+					cs[2-l-i][i] = (cs[2-l+1-i][i] * (1 - t)) + (cs[2-l-i][i+1] * t);
 				}
 			}
 
-			cs[0].toArray(arr);
+			cs[0][0].toArray(arr);
 			Lines[2][index * (sz + 1) + j].SetCoords(arr);
 		}
 	}
