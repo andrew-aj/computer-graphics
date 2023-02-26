@@ -138,8 +138,9 @@ GLushort BBIndices[IndexCount];
 std::vector<Vertex> Lines[NumObjects - 2];
 
 int SubLevel = 0;
-int NumSubVerts = IndexCount * std::exp2(SubLevel);
-const int sz = 100;
+int NumSubVerts = IndexCount * std::exp2(5);
+int tempSubSize = IndexCount;
+const int sz = 50;
 
 // ATTN: DON'T FORGET TO INCREASE THE ARRAY SIZE IN THE PICKING VERTEX SHADER WHEN YOU ADD MORE PICKING COLORS
 float pickingColor[IndexCount];
@@ -192,6 +193,14 @@ int initWindow(void) {
 	return 0;
 }
 
+void createAllVAOs() {
+	createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
+	createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
+	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
+	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
+	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
+}
+
 void initOpenGL(void) {
 	// Dark blue background
 	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
@@ -234,10 +243,7 @@ void initOpenGL(void) {
 	for(int i = 0; i < IndexCount; i++) {
 		pickingColor[i] = i / 255.0f;
 	}
-	// pickingColor[0] = 0 / 255.0f;
-	// pickingColor[1] = 1 / 255.0f;
-	// pickingColor[2] = 2 / 255.0f;
-	// pickingColor[3] = 3 / 255.0f;
+
 	Lines[0].resize(IndexCount);
 	Lines[1].resize(NumSubVerts);
 	Lines[2].resize((sz + 1) * IndexCount);
@@ -260,11 +266,7 @@ void initOpenGL(void) {
 	VertexBufferSize[2] = sizeof(Vertex) * Lines[1].size();
 	VertexBufferSize[3] = sizeof(Vertex) * Lines[2].size();
 
-	createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
-	createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
-	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
-	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
-	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
+	createAllVAOs();
 }
 
 // this actually creates the VAO (structure) and the VBO (vertex data buffer)
@@ -369,7 +371,7 @@ void createObjects(void) {
 	}
 
 	float subColor[] = {0.0f, 0.25f, 1.0f, 1.0f};
-	for(int i = 0; i < Lines[1].size(); i++) {
+	for(int i = 0; i < IndexCount; i++) {
 		Lines[1][i].SetCoords(Vertices[i].Position);
 		Lines[1][i].SetColor(subColor);
 	}
@@ -393,31 +395,28 @@ std::vector<point> k1;
 void recalculateSubdivde(int Level) {
 	float subColor[] = {0.0f, 0.25f, 1.0f, 1.0f};
 	if(Level == 0) {
-		Lines[1].clear();
-		Lines[1].resize(IndexCount);
-		for(int i = 0; i < Lines[1].size(); i++) {
+		for(int i = 0; i < IndexCount; i++) {
 			Lines[1][i].SetCoords(Vertices[i].Position);
 			Lines[1][i].SetColor(subColor);
 		}
+		tempSubSize = IndexCount * sizeof(Vertex);
 
-		VertexBufferSize[2] = sizeof(Vertex) * Lines[1].size();
-		createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
 
 		return;
 	}
 
 	k1.clear();
-	for(int i = 0; i < Lines[1].size(); i++) {
+	int tempSize = IndexCount * std::exp2(Level -1);
+	for(int i = 0; i < tempSize; i++) {
 		k1.push_back(Lines[1][i].Position);
 	}
 
-	Lines[1].clear();
-	NumSubVerts = IndexCount * std::exp2(Level);
-	Lines[1].resize(NumSubVerts);
+	tempSize = IndexCount * std::exp2(Level);
+	tempSubSize = tempSize * sizeof(Vertex);
 
 
 	int i_2 = 0;
-	for(int i = 0; i < NumSubVerts; i += 2) {
+	for(int i = 0; i < tempSize; i += 2) {
 		float arr[4];
 		((k1[i_2] * 3.0f + k1[(i_2+1) % k1.size()])/4.0f).toArray(arr);
 		Lines[1][i].SetCoords(arr);
@@ -428,8 +427,6 @@ void recalculateSubdivde(int Level) {
 
 		i_2++;
 	}
-
-	VertexBufferSize[2] = sizeof(Vertex) * Lines[1].size();
 }
 
 void subdivide(void) {
@@ -439,13 +436,6 @@ void subdivide(void) {
 	for(int i = 0; i <= SubLevel; i++) {
 		recalculateSubdivde(i);
 	}
-
-	createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
-	createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
-	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
-	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
-	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
-
 }
 
 void pickVertex(void) {
@@ -502,11 +492,6 @@ void pickVertex(void) {
 		Vertices[gPickedIndex].Color[i] = 1.0f;
 	}
 
-	createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
-	createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
-	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
-	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
-	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
 	pressed = true;
 
 	// ATTN: Project 1A, Task 2
@@ -525,12 +510,6 @@ void restoreVertex(void) {
 		}
 	}
 	pressed = false;
-
-	createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
-	createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
-	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
-	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
-	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
 }
 
 void updateBBCoeff(void) {
@@ -579,12 +558,6 @@ void moveVertex(void) {
 			subdivide();
 			updateBBCoeff();
 			dcAlg();
-
-			createVAOs(Vertices, Indices, sizeof(Vertices), sizeof(Indices), 0);
-			createVAOs(Lines[0].data(), nullptr, sizeof(Vertex) * Lines[0].size(), 0, 1);
-			createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
-			createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
-			createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
 		}
 	}
 }
@@ -609,6 +582,7 @@ void renderScene(void) {
 		glEnable(GL_PROGRAM_POINT_SIZE);
 
 		glBindVertexArray(VertexArrayId[0]);	// Draw Vertices
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[0]);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[0], Vertices);		// Update buffer data
 		glDrawElements(GL_POINTS, NumIdcs[0], GL_UNSIGNED_SHORT, (void*)0);
 
@@ -618,13 +592,21 @@ void renderScene(void) {
 		for(int i = 1; i < NumObjects - 1; i++) {
 			if(i != 3 || !hideBB) {
 				glBindVertexArray(VertexArrayId[i]);
-				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
-				glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i]);
+				if(i == 2) {
+					glBufferSubData(GL_ARRAY_BUFFER, 0, tempSubSize, Lines[i-1].data());
+					glDrawArrays(GL_LINE_LOOP, 0, tempSubSize / sizeof(Vertex));
+				}
+				else {
+					glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
+					glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+				}
 			}
 		}
 
 		if(!hideBB){
 			glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
+			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
 			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
 			glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
 		}
