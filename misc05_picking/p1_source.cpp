@@ -151,6 +151,8 @@ float oldColor[4];
 bool pressed = false;
 
 bool shiftPressed = false;
+bool fourPressed = false;
+bool showSplit = false;
 
 int initWindow(void) {
 	// Initialise GLFW
@@ -456,10 +458,10 @@ void pickVertex(void) {
 		glm::mat4 ModelMatrix = glm::mat4(1.0); // initialization
 		// ModelMatrix == TranslationMatrix * RotationMatrix;
 		glm::mat4 MVP;
-		if(shiftPressed)
-			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
-		else
-			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+		// if(shiftPressed)
+		// 	MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+		// else
+		MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
 		// MVP should really be PVM...
 		// Send the MVP to the shader (that is currently bound)
 		// as data type uniform (shared by all shader instances)
@@ -559,11 +561,10 @@ void moveVertex(void) {
 		gMessage = oss.str();
 
 		if(pressed) {
+			glm::mat4 ModelMatrix = glm::mat4(1.0);
+			glm::mat4 MV = gViewMatrix * ModelMatrix;
+			glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
 			if(!shiftPressed) {
-				glm::mat4 ModelMatrix = glm::mat4(1.0);
-				glm::mat4 MV = gViewMatrix * ModelMatrix;
-				glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
-
 				Vertices[gPickedIndex].Position[0] = coords[0];
 				Vertices[gPickedIndex].Position[1] = coords[1];
 
@@ -574,12 +575,14 @@ void moveVertex(void) {
 				updateBBCoeff();
 				dcAlg();
 			} else {
-				glm::mat4 ModelMatrix = glm::mat4(1.0);
-				glm::mat4 MV = sideViewMatrix * ModelMatrix;
-				glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
-
-				Vertices[gPickedIndex].Position[2] = coords[2];
-				Lines[0][gPickedIndex].Position[2] = coords[2];
+				glm::mat4 movement = glm::lookAt(glm::vec3(0, 5, 0),
+								 glm::vec3(0, 0, 0),
+								 glm::vec3(1, 0, 0));
+				MV = gViewMatrix * ModelMatrix;
+				coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
+				Vertices[gPickedIndex].Position[2] = -coords[0];
+				std::cout << coords[0] << std::endl;
+				Lines[0][gPickedIndex].Position[2] = -coords[0];
 				subdivide();
 				updateBBCoeff();
 				dcAlg();
@@ -602,50 +605,67 @@ void renderScene(void) {
 	glUseProgram(programID);
 	{
 		// see comments in pick
-		glm::mat4 ModelMatrix = glm::mat4(1.0);
-		glm::mat4 MVP;
-		if(shiftPressed)
-			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
-		else
-			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
-		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
-		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
-		if(shiftPressed)
-			glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &sideViewMatrix[0][0]);
-		else
-			glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
-		
-		glEnable(GL_PROGRAM_POINT_SIZE);
+		for(int i = 0; i < 2; i++) {
+			if(i == 0 && !showSplit)
+				continue;
+			glm::mat4 ModelMatrix = glm::mat4(1.0);
+			glm::mat4 MVP;
+			if(showSplit)
+				gProjectionMatrix = glm::ortho(-4.0f, 4.0f, -3.0f, 3.0f, 0.0f, 100.0f); // In world coordinates
+			if(showSplit && i == 0) {
+				MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+				glViewport(0, 0, window_width, window_height / 2);
+			}
+			else if (i == 1) {
+				if(showSplit) {
+					glViewport(0, window_height / 2, window_width, window_height);
+				} else {
+					gProjectionMatrix = glm::ortho(-4.0f, 4.0f, -3.0f, 3.0f, 0.0f, 100.0f); // In world coordinates
+					glViewport(0, 0, window_width, window_height);
+				}
+				MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+			}
 
-		glBindVertexArray(VertexArrayId[0]);	// Draw Vertices
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[0]);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[0], Vertices);		// Update buffer data
-		glDrawElements(GL_POINTS, NumIdcs[0], GL_UNSIGNED_SHORT, (void*)0);
+			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+			glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
+			if(showSplit)
+				glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &sideViewMatrix[0][0]);
+			else
+				glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
+
+			glEnable(GL_PROGRAM_POINT_SIZE);
+
+			glBindVertexArray(VertexArrayId[0]);	// Draw Vertices
+			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[0]);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[0], Vertices);		// Update buffer data
+			glDrawElements(GL_POINTS, NumIdcs[0], GL_UNSIGNED_SHORT, (void*)0);
 
 
 		// // If don't use indices
 		// glDrawArrays(GL_POINTS, 0, NumVerts[0]);
-		for(int i = 1; i < NumObjects - 1; i++) {
-			if(i != 3 || !hideBB) {
-				glBindVertexArray(VertexArrayId[i]);
-				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i]);
-				if(i == 2) {
-					glBufferSubData(GL_ARRAY_BUFFER, 0, tempSubSize, Lines[i-1].data());
-					glDrawArrays(GL_LINE_LOOP, 0, tempSubSize / sizeof(Vertex));
-				}
-				else {
-					glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
-					glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+			for(int i = 1; i < NumObjects - 1; i++) {
+				if(i != 3 || !hideBB) {
+					glBindVertexArray(VertexArrayId[i]);
+					glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i]);
+					if(i == 2) {
+						glBufferSubData(GL_ARRAY_BUFFER, 0, tempSubSize, Lines[i-1].data());
+						glDrawArrays(GL_LINE_LOOP, 0, tempSubSize / sizeof(Vertex));
+					}
+					else {
+						glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
+						glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+					}
 				}
 			}
-		}
 
-		if(!hideBB){
-			glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
-			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
-			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
-			glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+			if(!hideBB){
+				glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
+				glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+			}
 		}
+		glViewport(0, 0, window_width, window_height);
 
 		// ATTN: OTHER BINDING AND DRAWING COMMANDS GO HERE
 		// one set per object:
@@ -745,6 +765,13 @@ int main(void) {
 			shiftPressed = true;
 		} else if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE && glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_RELEASE) {
 			shiftPressed = false;
+		}
+
+		if(glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS && !fourPressed) {
+			fourPressed = true;
+			showSplit = !showSplit;
+		} else if(glfwGetKey(window, GLFW_KEY_4) == GLFW_RELEASE) {
+			fourPressed = false;
 		}
 		// for respective tasks
 
