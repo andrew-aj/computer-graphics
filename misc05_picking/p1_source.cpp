@@ -1,4 +1,5 @@
 // Include standard headers
+#include "glm/detail/type_vec.hpp"
 #include <cstddef>
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,6 +100,7 @@ const GLuint window_width = 1024, window_height = 768;
 
 glm::mat4 gProjectionMatrix;
 glm::mat4 gViewMatrix;
+glm::mat4 sideViewMatrix;
 
 // Program IDs
 GLuint programID;
@@ -147,6 +149,8 @@ float pickingColor[IndexCount];
 
 float oldColor[4];
 bool pressed = false;
+
+bool shiftPressed = false;
 
 int initWindow(void) {
 	// Initialise GLFW
@@ -223,6 +227,10 @@ void initOpenGL(void) {
 		glm::vec3(0, 0, 0), // and looks at the origin
 		glm::vec3(0, 1, 0)  // Head is looking up at the origin (set to 0,-1,0 to look upside-down)
 	);
+
+	sideViewMatrix = glm::lookAt(glm::vec3(0, 5, 0),
+								 glm::vec3(0, 0, 0),
+								 glm::vec3(0, 0, 1));
 
 	// Create and compile our GLSL program from the shaders
 	programID = LoadShaders("p1_StandardShading.vertexshader", "p1_StandardShading.fragmentshader");
@@ -447,7 +455,11 @@ void pickVertex(void) {
 	{
 		glm::mat4 ModelMatrix = glm::mat4(1.0); // initialization
 		// ModelMatrix == TranslationMatrix * RotationMatrix;
-		glm::mat4 MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+		glm::mat4 MVP;
+		if(shiftPressed)
+			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+		else
+			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
 		// MVP should really be PVM...
 		// Send the MVP to the shader (that is currently bound)
 		// as data type uniform (shared by all shader instances)
@@ -527,11 +539,15 @@ void updateBBCoeff(void) {
 
 // ATTN: Project 1C, Task 1 == Keep track of z coordinate for selected point and adjust its value accordingly based on if certain
 // buttons are being pressed
+double prevX, prevY;
+
 void moveVertex(void) {
 	glm::mat4 ModelMatrix = glm::mat4(1.0);
 	GLint viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
 	glm::vec4 vp = glm::vec4(viewport[0], viewport[1], viewport[2], viewport[3]);
+	double xpos, ypos;
+	glfwGetCursorPos(window, &xpos, &ypos);
 
 	if (gPickedIndex >= IndexCount) { 
 		// Any number > vertices-indices is background!
@@ -543,23 +559,36 @@ void moveVertex(void) {
 		gMessage = oss.str();
 
 		if(pressed) {
-			double xpos, ypos;
-			glfwGetCursorPos(window, &xpos, &ypos);
-			glm::mat4 ModelMatrix = glm::mat4(1.0);
-			glm::mat4 MV = gViewMatrix * ModelMatrix;
-			glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
+			if(!shiftPressed) {
+				glm::mat4 ModelMatrix = glm::mat4(1.0);
+				glm::mat4 MV = gViewMatrix * ModelMatrix;
+				glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
 
-			Vertices[gPickedIndex].Position[0] = coords[0];
-			Vertices[gPickedIndex].Position[1] = coords[1];
+				Vertices[gPickedIndex].Position[0] = coords[0];
+				Vertices[gPickedIndex].Position[1] = coords[1];
 
-			Lines[0][gPickedIndex].Position[0] = coords[0];
-			Lines[0][gPickedIndex].Position[1] = coords[1];
+				Lines[0][gPickedIndex].Position[0] = coords[0];
+				Lines[0][gPickedIndex].Position[1] = coords[1];
 
-			subdivide();
-			updateBBCoeff();
-			dcAlg();
+				subdivide();
+				updateBBCoeff();
+				dcAlg();
+			} else {
+				glm::mat4 ModelMatrix = glm::mat4(1.0);
+				glm::mat4 MV = sideViewMatrix * ModelMatrix;
+				glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
+
+				Vertices[gPickedIndex].Position[2] = coords[2];
+				Lines[0][gPickedIndex].Position[2] = coords[2];
+				subdivide();
+				updateBBCoeff();
+				dcAlg();
+			}
 		}
 	}
+
+	prevX = xpos;
+	prevY = ypos;
 }
 
 bool hideBB = false;
@@ -573,11 +602,18 @@ void renderScene(void) {
 	glUseProgram(programID);
 	{
 		// see comments in pick
-		glm::mat4 ModelMatrix = glm::mat4(1.0); 
-		glm::mat4 MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+		glm::mat4 ModelMatrix = glm::mat4(1.0);
+		glm::mat4 MVP;
+		if(shiftPressed)
+			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+		else
+			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
 		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
-		glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
+		if(shiftPressed)
+			glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &sideViewMatrix[0][0]);
+		else
+			glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
 		
 		glEnable(GL_PROGRAM_POINT_SIZE);
 
@@ -703,6 +739,12 @@ int main(void) {
 			notPressed2 = false;
 		} else if(glfwGetKey(window, GLFW_KEY_2) == GLFW_RELEASE){
 			notPressed2 = true;
+		}
+
+		if((glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) && !shiftPressed) {
+			shiftPressed = true;
+		} else if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE && glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_RELEASE) {
+			shiftPressed = false;
 		}
 		// for respective tasks
 
