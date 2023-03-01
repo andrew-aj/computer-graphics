@@ -100,6 +100,7 @@ const GLuint window_width = 1024, window_height = 768;
 
 glm::mat4 gProjectionMatrix;
 glm::mat4 gViewMatrix;
+glm::mat4 shiftedView;
 glm::mat4 sideViewMatrix;
 
 // Program IDs
@@ -230,8 +231,12 @@ void initOpenGL(void) {
 		glm::vec3(0, 1, 0)  // Head is looking up at the origin (set to 0,-1,0 to look upside-down)
 	);
 
-	sideViewMatrix = glm::lookAt(glm::vec3(0, 5, 0),
-								 glm::vec3(0, 0, 0),
+	shiftedView = glm::lookAt(glm::vec3(0, -1.5f, -5),
+							  glm::vec3(0, -1.5f,  0),
+							  glm::vec3(0,  1,  0));
+
+	sideViewMatrix = glm::lookAt(glm::vec3(0, 5, 1.5f),
+								 glm::vec3(0, 0, 1.5f),
 								 glm::vec3(0, 0, 1));
 
 	// Create and compile our GLSL program from the shaders
@@ -461,7 +466,10 @@ void pickVertex(void) {
 		// if(shiftPressed)
 		// 	MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
 		// else
-		MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+		if(showSplit)
+			MVP = gProjectionMatrix * shiftedView * ModelMatrix;
+		else
+			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
 		// MVP should really be PVM...
 		// Send the MVP to the shader (that is currently bound)
 		// as data type uniform (shared by all shader instances)
@@ -562,7 +570,11 @@ void moveVertex(void) {
 
 		if(pressed) {
 			glm::mat4 ModelMatrix = glm::mat4(1.0);
-			glm::mat4 MV = gViewMatrix * ModelMatrix;
+			glm::mat4 MV;
+			if(showSplit)
+				MV = shiftedView * ModelMatrix;
+			else
+				MV = gViewMatrix * ModelMatrix;
 			glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
 			if(!shiftPressed) {
 				Vertices[gPickedIndex].Position[0] = coords[0];
@@ -596,36 +608,8 @@ void moveVertex(void) {
 
 bool hideBB = false;
 
-void renderScene(void) {    
-	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
-	// Re-clear the screen for visible rendering
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glUseProgram(programID);
-	{
-		// see comments in pick
-		for(int i = 0; i < 2; i++) {
-			if(i == 0 && !showSplit)
-				continue;
+void drawObjects(glm::mat4& MVP) {
 			glm::mat4 ModelMatrix = glm::mat4(1.0);
-			glm::mat4 MVP;
-			if(showSplit)
-				gProjectionMatrix = glm::ortho(-4.0f, 4.0f, -3.0f, 3.0f, 0.0f, 100.0f); // In world coordinates
-			if(showSplit && i == 0) {
-				MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
-				glViewport(0, 0, window_width, window_height / 2);
-			}
-			else if (i == 1) {
-				if(showSplit) {
-					glViewport(0, window_height / 2, window_width, window_height);
-				} else {
-					gProjectionMatrix = glm::ortho(-4.0f, 4.0f, -3.0f, 3.0f, 0.0f, 100.0f); // In world coordinates
-					glViewport(0, 0, window_width, window_height);
-				}
-				MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
-			}
-
 			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 			glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
 			if(showSplit)
@@ -664,7 +648,30 @@ void renderScene(void) {
 				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
 				glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
 			}
+}
+
+void renderScene(void) {    
+	// Dark blue background
+	glClearColor(0.0f, 0.0f, 0.4f, 1.0f);
+	// Re-clear the screen for visible rendering
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(programID);
+	{
+		// see comments in pick
+		glm::mat4 ModelMatrix = glm::mat4(1.0);
+		glm::mat4 MVP;
+
+		if(showSplit) {
+			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+			drawObjects(MVP);
+			MVP = gProjectionMatrix * shiftedView * ModelMatrix;
+			drawObjects(MVP);
+		} else {
+			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+			drawObjects(MVP);
 		}
+
 		glViewport(0, 0, window_width, window_height);
 
 		// ATTN: OTHER BINDING AND DRAWING COMMANDS GO HERE
