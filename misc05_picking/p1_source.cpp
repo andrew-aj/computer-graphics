@@ -652,7 +652,7 @@ void drawObjects(glm::mat4& MVP) {
 
 void renderScene(void) {    
 	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.4f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 	// Re-clear the screen for visible rendering
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
