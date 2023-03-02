@@ -119,7 +119,7 @@ GLuint gPickedIndex;
 std::string gMessage;
 
 // ATTN: INCREASE THIS NUMBER AS YOU CREATE NEW OBJECTS
-const GLuint NumObjects = 5; // Number of objects types in the scene
+const GLuint NumObjects = 7; // Number of objects types in the scene
 
 // Keeps track of IDs associated with each object
 GLuint VertexArrayId[NumObjects];
@@ -138,7 +138,9 @@ Vertex Vertices[IndexCount];
 GLushort Indices[IndexCount];
 Vertex BBCoeff[IndexCount];
 GLushort BBIndices[IndexCount];
-std::vector<Vertex> Lines[NumObjects - 2];
+std::vector<Vertex> Lines[3];
+Vertex aniPoint;
+std::array<Vertex, 2> Dirs[1];
 
 int SubLevel = 0;
 int NumSubVerts = IndexCount * std::exp2(5);
@@ -154,6 +156,8 @@ bool pressed = false;
 bool shiftPressed = false;
 bool fourPressed = false;
 bool showSplit = false;
+glm::vec3 tangent;
+glm::vec3 normal;
 
 int initWindow(void) {
 	// Initialise GLFW
@@ -206,6 +210,8 @@ void createAllVAOs() {
 	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
 	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
 	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
+	createVAOs(&aniPoint, nullptr, sizeof(Vertex), 0, 5);
+	createVAOs(Dirs[0].data(), nullptr, sizeof(Vertex) * 2, 0, 6);
 }
 
 void initOpenGL(void) {
@@ -281,6 +287,9 @@ void initOpenGL(void) {
 	VertexBufferSize[2] = sizeof(Vertex) * Lines[1].size();
 	VertexBufferSize[3] = sizeof(Vertex) * Lines[2].size();
 
+	VertexBufferSize[5] = sizeof(Vertex);
+	VertexBufferSize[6] = sizeof(Vertex) * 2;
+
 	createAllVAOs();
 }
 
@@ -328,26 +337,40 @@ void createVAOs(Vertex Vertices[], GLushort Indices[], size_t BufferSize, size_t
 	}
 }
 
+void dcAtT(float arr[], float t, int j, int index, bool set=true, bool calcTan=false, bool calcReg=false) {
+	point cs[3][3];
+	cs[2][0] = point(BBCoeff[index].Position);
+	cs[1][1] = point(Vertices[index].Position);
+	cs[0][2] = point(BBCoeff[(index + 1) % IndexCount].Position);
 
+	for(int l = 1; l < 3; l++) {
+		for(int i = 0; i < 3 - l; i++) {
+			cs[2-l-i][i] = (cs[2-l+1-i][i] * (1 - t)) + (cs[2-l-i][i+1] * t);
+		}
+	}
+
+	if(set) {
+		cs[0][0].toArray(arr);
+		Lines[2][index * (sz + 1) + j].SetCoords(arr);
+	} else if(calcTan){
+		cs[1][0].toArray(arr);
+		glm::vec3 first(arr[0], arr[1], arr[2]);
+		cs[1][1].toArray(arr);
+		glm::vec3 second(arr[0], arr[1], arr[2]);
+		tangent = first - second;
+		tangent = glm::normalize(tangent);
+	} else if(calcReg) {
+		cs[0][0].toArray(arr);
+		aniPoint.SetCoords(arr);
+	}
+}
 
 void dcAlg() {
 	float arr[4];
 	for(int index = 0; index < IndexCount; index++) {
 		for(int j = 0; j <= sz; j++) {
 			float t = j / (double)sz;
-			point cs[3][3];
-			cs[2][0] = point(BBCoeff[index].Position);
-			cs[1][1] = point(Vertices[index].Position);
-			cs[0][2] = point(BBCoeff[(index + 1) % IndexCount].Position);
-
-			for(int l = 1; l < 3; l++) {
-				for(int i = 0; i < 3 - l; i++) {
-					cs[2-l-i][i] = (cs[2-l+1-i][i] * (1 - t)) + (cs[2-l-i][i+1] * t);
-				}
-			}
-
-			cs[0][0].toArray(arr);
-			Lines[2][index * (sz + 1) + j].SetCoords(arr);
+			dcAtT(arr, t, j, index);
 		}
 	}
 }
@@ -394,6 +417,11 @@ void createObjects(void) {
 	for(int i = 0; i < Lines[2].size(); i++) {
 		Lines[2][i].SetColor(color);
 	}
+
+	float arr[4];
+	dcAtT(arr, 0, 0, 0, false, false, true);
+	float pColor[] = {1.0f, 1.0f, 0.0f, 1.0f};
+	aniPoint.SetColor(pColor);
 
 	dcAlg();
 
@@ -626,7 +654,7 @@ void drawObjects(glm::mat4& MVP) {
 
 		// // If don't use indices
 		// glDrawArrays(GL_POINTS, 0, NumVerts[0]);
-			for(int i = 1; i < NumObjects - 1; i++) {
+			for(int i = 1; i < 4; i++) {
 				if(i != 3 || !hideBB) {
 					glBindVertexArray(VertexArrayId[i]);
 					glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i]);
