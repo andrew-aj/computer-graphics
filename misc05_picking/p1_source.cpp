@@ -593,7 +593,6 @@ void moveVertex(void) {
 				MV = gViewMatrix * ModelMatrix;
 				coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
 				Vertices[gPickedIndex].Position[2] = -coords[0];
-				std::cout << coords[0] << std::endl;
 				Lines[0][gPickedIndex].Position[2] = -coords[0];
 				subdivide();
 				updateBBCoeff();
