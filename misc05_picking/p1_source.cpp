@@ -156,8 +156,12 @@ bool pressed = false;
 bool shiftPressed = false;
 bool fourPressed = false;
 bool showSplit = false;
-glm::vec3 tangent;
-glm::vec3 normal;
+bool showAnimation = true;
+bool fivePressed = false;
+glm::vec4 tangent;
+glm::vec4 normal;
+float currentT = 0;
+int currentIndex = 0;
 
 int initWindow(void) {
 	// Initialise GLFW
@@ -353,12 +357,10 @@ void dcAtT(float arr[], float t, int j, int index, bool set=true, bool calcTan=f
 		cs[0][0].toArray(arr);
 		Lines[2][index * (sz + 1) + j].SetCoords(arr);
 	} else if(calcTan){
-		cs[1][0].toArray(arr);
-		glm::vec3 first(arr[0], arr[1], arr[2]);
-		cs[1][1].toArray(arr);
-		glm::vec3 second(arr[0], arr[1], arr[2]);
-		tangent = first - second;
+		point derivative = (cs[1][1] - cs[2][0]) * (1 - t) * 2 + (cs[0][2] - cs[1][1]) * 2 * t;
+		tangent = glm::vec4(derivative.x, derivative.y, derivative.z, 0);
 		tangent = glm::normalize(tangent);
+		tangent /= 2;
 	} else if(calcReg) {
 		cs[0][0].toArray(arr);
 		aniPoint.SetCoords(arr);
@@ -374,6 +376,8 @@ void dcAlg() {
 		}
 	}
 }
+
+void calcTangent();
 
 void createObjects(void) {
 	// ATTN: DERIVE YOUR NEW OBJECTS HERE:  each object has
@@ -419,9 +423,14 @@ void createObjects(void) {
 	}
 
 	float arr[4];
-	dcAtT(arr, 0, 0, 0, false, false, true);
+	dcAtT(arr, currentT, 0, currentIndex, false, false, true);
 	float pColor[] = {1.0f, 1.0f, 0.0f, 1.0f};
 	aniPoint.SetColor(pColor);
+
+	calcTangent();
+	float tanColor[] = {1, 0, 0, 1};
+	Dirs[0][0].SetColor(tanColor);
+	Dirs[0][1].SetColor(tanColor);
 
 	dcAlg();
 
@@ -431,6 +440,26 @@ void createObjects(void) {
 
 	// ATTN: Project 1C, Task 3 == set coordinates of yellow point based on BB curve and perform calculations to find
 	// the tangent, normal, and binormal
+}
+
+void calcTangent() {
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, true, false);
+	Dirs[0][0].SetCoords(aniPoint.Position);
+	glm::vec4 tanEnd(aniPoint.Position[0], aniPoint.Position[1], aniPoint.Position[2], 1);
+	tanEnd += tangent;
+	Dirs[0][1].SetCoords(&tanEnd[0]);
+}
+
+void updateAnimation() {
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, false, true);
+	currentT += 0.01;
+	if(currentT > 1) {
+		currentIndex = (currentIndex + 1) % IndexCount;
+		currentT = 0;
+	}
+
 }
 
 std::vector<point> k1;
@@ -675,6 +704,19 @@ void drawObjects(glm::mat4& MVP) {
 				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
 				glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
 			}
+
+			if (!showAnimation) {
+				glBindVertexArray(VertexArrayId[5]);	// Draw Vertices
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[5]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[5], &aniPoint);		// Update buffer data
+				glDrawArrays(GL_POINTS, 0, 1);
+
+				glBindVertexArray(VertexArrayId[6]);
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[6]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[6], &Dirs[0]);
+				glDrawArrays(GL_LINES, 0, 2);
+			}
+
 }
 
 void renderScene(void) {    
@@ -688,6 +730,8 @@ void renderScene(void) {
 		// see comments in pick
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP;
+		updateAnimation();
+		calcTangent();
 
 		if(showSplit) {
 			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
@@ -806,6 +850,13 @@ int main(void) {
 			showSplit = !showSplit;
 		} else if(glfwGetKey(window, GLFW_KEY_4) == GLFW_RELEASE) {
 			fourPressed = false;
+		}
+
+		if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS && !fivePressed) {
+			fivePressed = true;
+			showAnimation = !showAnimation;
+		} else if(glfwGetKey(window, GLFW_KEY_5) == GLFW_RELEASE) {
+			fivePressed = false;
 		}
 		// for respective tasks
 
