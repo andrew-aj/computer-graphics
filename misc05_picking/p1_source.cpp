@@ -1,4 +1,5 @@
 // Include standard headers
+#include "glm/detail/type_vec.hpp"
 #include <cstddef>
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,6 +100,8 @@ const GLuint window_width = 1024, window_height = 768;
 
 glm::mat4 gProjectionMatrix;
 glm::mat4 gViewMatrix;
+glm::mat4 shiftedView;
+glm::mat4 sideViewMatrix;
 
 // Program IDs
 GLuint programID;
@@ -116,7 +119,7 @@ GLuint gPickedIndex;
 std::string gMessage;
 
 // ATTN: INCREASE THIS NUMBER AS YOU CREATE NEW OBJECTS
-const GLuint NumObjects = 5; // Number of objects types in the scene
+const GLuint NumObjects = 9; // Number of objects types in the scene
 
 // Keeps track of IDs associated with each object
 GLuint VertexArrayId[NumObjects];
@@ -135,7 +138,9 @@ Vertex Vertices[IndexCount];
 GLushort Indices[IndexCount];
 Vertex BBCoeff[IndexCount];
 GLushort BBIndices[IndexCount];
-std::vector<Vertex> Lines[NumObjects - 2];
+std::vector<Vertex> Lines[3];
+Vertex aniPoint;
+std::array<Vertex, 2> Dirs[3];
 
 int SubLevel = 0;
 int NumSubVerts = IndexCount * std::exp2(5);
@@ -147,6 +152,17 @@ float pickingColor[IndexCount];
 
 float oldColor[4];
 bool pressed = false;
+
+bool shiftPressed = false;
+bool fourPressed = false;
+bool showSplit = false;
+bool showAnimation = true;
+bool fivePressed = false;
+glm::vec4 tangent;
+glm::vec4 normal;
+glm::vec4 binormal;
+float currentT = 0;
+int currentIndex = 0;
 
 int initWindow(void) {
 	// Initialise GLFW
@@ -199,6 +215,10 @@ void createAllVAOs() {
 	createVAOs(Lines[1].data(), nullptr, sizeof(Vertex) * Lines[1].size(), 0, 2);
 	createVAOs(Lines[2].data(), nullptr, sizeof(Vertex) * Lines[2].size(), 0, 3);
 	createVAOs(BBCoeff, BBIndices, sizeof(BBCoeff), sizeof(BBIndices), 4);
+	createVAOs(&aniPoint, nullptr, sizeof(Vertex), 0, 5);
+	createVAOs(Dirs[0].data(), nullptr, sizeof(Vertex) * 2, 0, 6);
+	createVAOs(Dirs[1].data(), nullptr, sizeof(Vertex) * 2, 0, 7);
+	createVAOs(Dirs[2].data(), nullptr, sizeof(Vertex) * 2, 0, 8);
 }
 
 void initOpenGL(void) {
@@ -223,6 +243,14 @@ void initOpenGL(void) {
 		glm::vec3(0, 0, 0), // and looks at the origin
 		glm::vec3(0, 1, 0)  // Head is looking up at the origin (set to 0,-1,0 to look upside-down)
 	);
+
+	shiftedView = glm::lookAt(glm::vec3(0, -1.5f, -5),
+							  glm::vec3(0, -1.5f,  0),
+							  glm::vec3(0,  1,  0));
+
+	sideViewMatrix = glm::lookAt(glm::vec3(-5, 1.5, 0),
+								 glm::vec3(0, 1.5, 0),
+								 glm::vec3(0, 1, 0));
 
 	// Create and compile our GLSL program from the shaders
 	programID = LoadShaders("p1_StandardShading.vertexshader", "p1_StandardShading.fragmentshader");
@@ -265,6 +293,11 @@ void initOpenGL(void) {
 	VertexBufferSize[1] = sizeof(Vertex) * Lines[0].size();
 	VertexBufferSize[2] = sizeof(Vertex) * Lines[1].size();
 	VertexBufferSize[3] = sizeof(Vertex) * Lines[2].size();
+
+	VertexBufferSize[5] = sizeof(Vertex);
+	VertexBufferSize[6] = sizeof(Vertex) * 2;
+	VertexBufferSize[7] = sizeof(Vertex) * 2;
+	VertexBufferSize[8] = sizeof(Vertex) * 2;
 
 	createAllVAOs();
 }
@@ -314,28 +347,55 @@ void createVAOs(Vertex Vertices[], GLushort Indices[], size_t BufferSize, size_t
 }
 
 
+// https://en.wikipedia.org/wiki/Frenet%E2%80%93Serret_formulas#Other_expressions_of_the_frame
+// formulas used to calculate the tangent, normal, and binormal vectors
+void dcAtT(float arr[], float t, int j, int index, bool set=true, bool calcTan=false, bool calcReg=false, bool calcNorm=false, bool calcBiNorm=false) {
+	point cs[3][3];
+	cs[2][0] = point(BBCoeff[index].Position);
+	cs[1][1] = point(Vertices[index].Position);
+	cs[0][2] = point(BBCoeff[(index + 1) % IndexCount].Position);
+
+	for(int l = 1; l < 3; l++) {
+		for(int i = 0; i < 3 - l; i++) {
+			cs[2-l-i][i] = (cs[2-l+1-i][i] * (1 - t)) + (cs[2-l-i][i+1] * t);
+		}
+	}
+
+	if(set) {
+		cs[0][0].toArray(arr);
+		Lines[2][index * (sz + 1) + j].SetCoords(arr);
+	} else if(calcTan){
+		point derivative = (cs[1][1] - cs[2][0]) * (1 - t) * 2 + (cs[0][2] - cs[1][1]) * 2 * t;
+		tangent = glm::vec4(derivative.x, derivative.y, derivative.z, 0);
+		tangent = glm::normalize(tangent);
+	} else if(calcReg) {
+		cs[0][0].toArray(arr);
+		aniPoint.SetCoords(arr);
+	} else if(calcNorm) {
+		point derv1 = (cs[1][1] - cs[2][0]) * (1 - t) * 2 + (cs[0][2] - cs[1][1]) * 2 * t;
+		point derv2 = (cs[0][2] - cs[1][1] * 2 + cs[2][0]) * 2;
+		glm::vec3 cross = glm::cross(glm::vec3(derv2.x, derv2.y, derv2.z), glm::vec3(derv1.x, derv1.y, derv1.z));
+		cross = glm::cross(glm::vec3(derv1.x, derv1.y, derv1.z), cross);
+		normal = glm::vec4(glm::normalize(cross),0);
+	} else if(calcBiNorm) {
+		glm::vec3 cross = glm::cross(glm::vec3(tangent), glm::vec3(normal));
+		binormal = glm::vec4(glm::normalize(cross), 0);
+	}
+}
 
 void dcAlg() {
 	float arr[4];
 	for(int index = 0; index < IndexCount; index++) {
 		for(int j = 0; j <= sz; j++) {
 			float t = j / (double)sz;
-			point cs[3][3];
-			cs[2][0] = point(BBCoeff[index].Position);
-			cs[1][1] = point(Vertices[index].Position);
-			cs[0][2] = point(BBCoeff[(index + 1) % IndexCount].Position);
-
-			for(int l = 1; l < 3; l++) {
-				for(int i = 0; i < 3 - l; i++) {
-					cs[2-l-i][i] = (cs[2-l+1-i][i] * (1 - t)) + (cs[2-l-i][i+1] * t);
-				}
-			}
-
-			cs[0][0].toArray(arr);
-			Lines[2][index * (sz + 1) + j].SetCoords(arr);
+			dcAtT(arr, t, j, index);
 		}
 	}
 }
+
+void calcTangent();
+void calcNormal();
+void calcBiNorm();
 
 void createObjects(void) {
 	// ATTN: DERIVE YOUR NEW OBJECTS HERE:  each object has
@@ -380,6 +440,26 @@ void createObjects(void) {
 		Lines[2][i].SetColor(color);
 	}
 
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, false, true);
+	float pColor[] = {1.0f, 1.0f, 0.0f, 1.0f};
+	aniPoint.SetColor(pColor);
+
+	calcTangent();
+	float tanColor[] = {1, 0, 0, 1};
+	Dirs[0][0].SetColor(tanColor);
+	Dirs[0][1].SetColor(tanColor);
+
+	calcNormal();
+	float normColor[] = {0, 1, 0, 1};
+	Dirs[1][0].SetColor(normColor);
+	Dirs[1][1].SetColor(normColor);
+
+	calcBiNorm();
+	float biNorm[] = {0, 0.25, 1, 1};
+	Dirs[2][0].SetColor(biNorm);
+	Dirs[2][1].SetColor(biNorm);
+
 	dcAlg();
 
 	// ATTN: Project 1B, Task 2 == create the vertices associated to the smoother curve generated by subdivision
@@ -388,6 +468,44 @@ void createObjects(void) {
 
 	// ATTN: Project 1C, Task 3 == set coordinates of yellow point based on BB curve and perform calculations to find
 	// the tangent, normal, and binormal
+}
+
+void calcBiNorm() {
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, false, false, false, true);
+	Dirs[2][0].SetCoords(aniPoint.Position);
+	glm::vec4 binormEnd(aniPoint.Position[0], aniPoint.Position[1], aniPoint.Position[2], 1);
+	binormEnd += (binormal / 2.f);
+	Dirs[2][1].SetCoords(&binormEnd[0]);
+}
+
+void calcNormal() {
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, false, false, true, false);
+	Dirs[1][0].SetCoords(aniPoint.Position);
+	glm::vec4 normEnd(aniPoint.Position[0], aniPoint.Position[1], aniPoint.Position[2], 1);
+	normEnd += (normal / 2.f);
+	Dirs[1][1].SetCoords(&normEnd[0]);
+}
+
+void calcTangent() {
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, true, false);
+	Dirs[0][0].SetCoords(aniPoint.Position);
+	glm::vec4 tanEnd(aniPoint.Position[0], aniPoint.Position[1], aniPoint.Position[2], 1);
+	tanEnd += (tangent / 2.f);
+	Dirs[0][1].SetCoords(&tanEnd[0]);
+}
+
+void updateAnimation() {
+	float arr[4];
+	dcAtT(arr, currentT, 0, currentIndex, false, false, true);
+	currentT += 0.01;
+	if(currentT > 1) {
+		currentIndex = (currentIndex + 1) % IndexCount;
+		currentT = 0;
+	}
+
 }
 
 std::vector<point> k1;
@@ -447,7 +565,14 @@ void pickVertex(void) {
 	{
 		glm::mat4 ModelMatrix = glm::mat4(1.0); // initialization
 		// ModelMatrix == TranslationMatrix * RotationMatrix;
-		glm::mat4 MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+		glm::mat4 MVP;
+		// if(shiftPressed)
+		// 	MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+		// else
+		if(showSplit)
+			MVP = gProjectionMatrix * shiftedView * ModelMatrix;
+		else
+			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
 		// MVP should really be PVM...
 		// Send the MVP to the shader (that is currently bound)
 		// as data type uniform (shared by all shader instances)
@@ -461,6 +586,7 @@ void pickVertex(void) {
 		glBindVertexArray(VertexArrayId[0]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[0]);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[0], Vertices);	// update buffer data
+		glPointSize(15);
 		glDrawElements(GL_POINTS, NumIdcs[0], GL_UNSIGNED_SHORT, (void*)0);
 		glBindVertexArray(0);
 	}
@@ -527,11 +653,15 @@ void updateBBCoeff(void) {
 
 // ATTN: Project 1C, Task 1 == Keep track of z coordinate for selected point and adjust its value accordingly based on if certain
 // buttons are being pressed
+double prevX, prevY;
+
 void moveVertex(void) {
 	glm::mat4 ModelMatrix = glm::mat4(1.0);
 	GLint viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
 	glm::vec4 vp = glm::vec4(viewport[0], viewport[1], viewport[2], viewport[3]);
+	double xpos, ypos;
+	glfwGetCursorPos(window, &xpos, &ypos);
 
 	if (gPickedIndex >= IndexCount) { 
 		// Any number > vertices-indices is background!
@@ -543,26 +673,112 @@ void moveVertex(void) {
 		gMessage = oss.str();
 
 		if(pressed) {
-			double xpos, ypos;
-			glfwGetCursorPos(window, &xpos, &ypos);
 			glm::mat4 ModelMatrix = glm::mat4(1.0);
-			glm::mat4 MV = gViewMatrix * ModelMatrix;
+			glm::mat4 MV;
+			if(showSplit)
+				MV = shiftedView * ModelMatrix;
+			else
+				MV = gViewMatrix * ModelMatrix;
 			glm::vec3 coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
+			if(!shiftPressed) {
+				Vertices[gPickedIndex].Position[0] = coords[0];
+				Vertices[gPickedIndex].Position[1] = coords[1];
 
-			Vertices[gPickedIndex].Position[0] = coords[0];
-			Vertices[gPickedIndex].Position[1] = coords[1];
+				Lines[0][gPickedIndex].Position[0] = coords[0];
+				Lines[0][gPickedIndex].Position[1] = coords[1];
 
-			Lines[0][gPickedIndex].Position[0] = coords[0];
-			Lines[0][gPickedIndex].Position[1] = coords[1];
-
-			subdivide();
-			updateBBCoeff();
-			dcAlg();
+				subdivide();
+				updateBBCoeff();
+				dcAlg();
+			} else {
+				glm::mat4 movement = glm::lookAt(glm::vec3(0, 5, 0),
+								 glm::vec3(0, 0, 0),
+								 glm::vec3(1, 0, 0));
+				MV = gViewMatrix * ModelMatrix;
+				coords = glm::unProject(glm::vec3(xpos, window_height - ypos, 0.0), MV, gProjectionMatrix, glm::vec4(0.0, 0.0, window_width, window_height));
+				Vertices[gPickedIndex].Position[2] = -coords[0];
+				Lines[0][gPickedIndex].Position[2] = -coords[0];
+				subdivide();
+				updateBBCoeff();
+				dcAlg();
+			}
 		}
 	}
+
+	prevX = xpos;
+	prevY = ypos;
 }
 
 bool hideBB = false;
+
+void drawObjects(glm::mat4& MVP) {
+			glm::mat4 ModelMatrix = glm::mat4(1.0);
+			glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+			glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
+			if(showSplit)
+				glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &sideViewMatrix[0][0]);
+			else
+				glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
+
+			glEnable(GL_PROGRAM_POINT_SIZE);
+
+			glBindVertexArray(VertexArrayId[0]);	// Draw Vertices
+			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[0]);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[0], Vertices);		// Update buffer data
+			glPointSize(15);
+			glDrawElements(GL_POINTS, NumIdcs[0], GL_UNSIGNED_SHORT, (void*)0);
+
+
+
+		// // If don't use indices
+		// glDrawArrays(GL_POINTS, 0, NumVerts[0]);
+			for(int i = 1; i < 4; i++) {
+				if(i != 3 || !hideBB) {
+					glBindVertexArray(VertexArrayId[i]);
+					glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i]);
+					if(i == 2) {
+						glBufferSubData(GL_ARRAY_BUFFER, 0, tempSubSize, Lines[i-1].data());
+						glDrawArrays(GL_LINE_LOOP, 0, tempSubSize / sizeof(Vertex));
+					}
+					else {
+						glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
+						glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
+					}
+				}
+			}
+
+			if(!hideBB){
+				glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
+				glPointSize(10);
+				glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+			}
+
+			if (!showAnimation) {
+				glBindVertexArray(VertexArrayId[5]);	// Draw Vertices
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[5]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[5], &aniPoint);		// Update buffer data
+				glPointSize(20);
+				glDrawArrays(GL_POINTS, 0, 1);
+
+				glBindVertexArray(VertexArrayId[6]);
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[6]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[6], &Dirs[0]);
+				glDrawArrays(GL_LINES, 0, 2);
+
+				glBindVertexArray(VertexArrayId[7]);
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[7]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[7], &Dirs[1]);
+				glDrawArrays(GL_LINES, 0, 2);
+
+				glBindVertexArray(VertexArrayId[8]);
+				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[8]);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[8], &Dirs[2]);
+				glDrawArrays(GL_LINES, 0, 2);
+			}
+
+}
 
 void renderScene(void) {    
 	// Dark blue background
@@ -573,43 +789,26 @@ void renderScene(void) {
 	glUseProgram(programID);
 	{
 		// see comments in pick
-		glm::mat4 ModelMatrix = glm::mat4(1.0); 
-		glm::mat4 MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
-		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
-		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
-		glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
-		
-		glEnable(GL_PROGRAM_POINT_SIZE);
-
-		glBindVertexArray(VertexArrayId[0]);	// Draw Vertices
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[0]);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[0], Vertices);		// Update buffer data
-		glDrawElements(GL_POINTS, NumIdcs[0], GL_UNSIGNED_SHORT, (void*)0);
-
-
-		// // If don't use indices
-		// glDrawArrays(GL_POINTS, 0, NumVerts[0]);
-		for(int i = 1; i < NumObjects - 1; i++) {
-			if(i != 3 || !hideBB) {
-				glBindVertexArray(VertexArrayId[i]);
-				glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i]);
-				if(i == 2) {
-					glBufferSubData(GL_ARRAY_BUFFER, 0, tempSubSize, Lines[i-1].data());
-					glDrawArrays(GL_LINE_LOOP, 0, tempSubSize / sizeof(Vertex));
-				}
-				else {
-					glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[i], Lines[i-1].data());
-					glDrawArrays(GL_LINE_LOOP, 0, Lines[i-1].size());
-				}
-			}
+		glm::mat4 ModelMatrix = glm::mat4(1.0);
+		glm::mat4 MVP;
+		updateAnimation();
+		if(!showAnimation) {
+			calcTangent();
+			calcNormal();
+			calcBiNorm();
 		}
 
-		if(!hideBB){
-			glBindVertexArray(VertexArrayId[4]);	// Draw Vertices
-			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
-			glBufferSubData(GL_ARRAY_BUFFER, 0, VertexBufferSize[4], BBCoeff);		// Update buffer data
-			glDrawElements(GL_POINTS, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+		if(showSplit) {
+			MVP = gProjectionMatrix * sideViewMatrix * ModelMatrix;
+			drawObjects(MVP);
+			MVP = gProjectionMatrix * shiftedView * ModelMatrix;
+			drawObjects(MVP);
+		} else {
+			MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
+			drawObjects(MVP);
 		}
+
+		glViewport(0, 0, window_width, window_height);
 
 		// ATTN: OTHER BINDING AND DRAWING COMMANDS GO HERE
 		// one set per object:
@@ -703,6 +902,26 @@ int main(void) {
 			notPressed2 = false;
 		} else if(glfwGetKey(window, GLFW_KEY_2) == GLFW_RELEASE){
 			notPressed2 = true;
+		}
+
+		if((glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) && !shiftPressed) {
+			shiftPressed = true;
+		} else if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE && glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_RELEASE) {
+			shiftPressed = false;
+		}
+
+		if(glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS && !fourPressed) {
+			fourPressed = true;
+			showSplit = !showSplit;
+		} else if(glfwGetKey(window, GLFW_KEY_4) == GLFW_RELEASE) {
+			fourPressed = false;
+		}
+
+		if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS && !fivePressed) {
+			fivePressed = true;
+			showAnimation = !showAnimation;
+		} else if(glfwGetKey(window, GLFW_KEY_5) == GLFW_RELEASE) {
+			fivePressed = false;
 		}
 		// for respective tasks
 
