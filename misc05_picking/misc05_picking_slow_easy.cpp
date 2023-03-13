@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
+#include <cmath>
 #include <vector>
 #include <array>
 #include <stack>   
@@ -100,6 +101,13 @@ Vertex CoordVerts[CoordVertsCount];
 Vertex gridVerts[121];
 GLushort gridIndices[440];
 
+const float radius = 17.32;
+float theta = 0.96;
+float phi = 0.79;
+
+bool moveCam = false;
+bool cPressed = false;
+
 int initWindow(void) {
 	// Initialise GLFW
 	if (!glfwInit()) {
@@ -144,6 +152,15 @@ int initWindow(void) {
 	return 0;
 }
 
+glm::vec3 toCartesian() {
+	glm::vec3 val;
+	val.x = radius * std::sin(phi) * std::cos(theta);
+	val.z = radius * std::sin(phi) * std::sin(theta);
+	val.y = radius * std::cos(phi);
+	std::cout << val.x << " " << val.y << " " << val.z << std::endl;
+	return val;
+}
+
 void initOpenGL(void) {
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
@@ -158,7 +175,7 @@ void initOpenGL(void) {
 	//gProjectionMatrix = glm::ortho(-4.0f, 4.0f, -3.0f, 3.0f, 0.0f, 100.0f); // In world coordinates
 
 	// Camera matrix
-	gViewMatrix = glm::lookAt(glm::vec3(10.0, 10.0, 10.0f),	// eye
+	gViewMatrix = glm::lookAt(toCartesian(),	// eye
 		glm::vec3(0.0, 0.0, 0.0),	// center
 		glm::vec3(0.0, 1.0, 0.0));	// up
 
@@ -300,11 +317,8 @@ void createObjects(void) {
 			z++;
 			x = -5;
 		}
-		std::cout << "x: " << x << " z: " << z << std::endl;
 		gridIndices[index++] = (x++ + 5) + (z + 5) * 11;
-		std::cout << "x: " << x << " z: " << z << std::endl;
 		gridIndices[index++] = (x + 5) + (z + 5) * 11;
-		std::cout << index << std::endl;
 	}
 
 	x = -5;
@@ -314,11 +328,8 @@ void createObjects(void) {
 			x++;
 			z = -5;
 		}
-		std::cout << "x: " << x << " z: " << z << std::endl;
 		gridIndices[index++] = (x + 5) + (z++ + 5) * 11;
-		std::cout << "x: " << x << " z: " << z << std::endl;
 		gridIndices[index++] = (x + 5) + (z + 5) * 11;
-		std::cout << index << std::endl;
 	}
 
 	//-- .OBJs --//
@@ -431,6 +442,38 @@ void cleanup(void) {
 	glfwTerminate();
 }
 
+const float tau = 2 * 3.14159;
+const float mpi = 3.14159;
+
+uint8_t heldStatus = 0;
+
+void handleArrow() {
+	if(heldStatus & 1) {
+		theta += 0.01;
+	} else if(heldStatus & 2) {
+		theta -= 0.01;
+	} else if(heldStatus & 4) {
+		phi += 0.01;
+	} else if(heldStatus & 8){
+		phi -= 0.01;
+	}
+
+	if(phi < 0)
+		phi = 0.001;
+	else if(phi > mpi)
+		phi = mpi - 0.001;
+
+	if(theta < 0)
+		theta = tau;
+	else if(theta > tau)
+		theta = 0;
+
+
+	gViewMatrix = glm::lookAt(toCartesian(),	// eye
+		glm::vec3(0.0, 0.0, 0.0),	// center
+		glm::vec3(0.0, 1.0, 0.0));	// up
+}
+
 // Alternative way of triggering functions on keyboard events
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	// ATTN: MODIFY AS APPROPRIATE
@@ -445,10 +488,50 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 			break;
 		case GLFW_KEY_S:
 			break;
+		case GLFW_KEY_C:
+			if(!cPressed) {
+				moveCam = !moveCam;
+				cPressed = true;
+			}
+			break;
+		case GLFW_KEY_LEFT:
+			heldStatus |= 1;
+			break;
+		case GLFW_KEY_RIGHT:
+			heldStatus |= 2;
+			break;
+		case GLFW_KEY_UP:
+			heldStatus |= 4;
+			break;
+		case GLFW_KEY_DOWN:
+			heldStatus |= 8;
+			break;
 		case GLFW_KEY_SPACE:
 			break;
 		default:
 			break;
+		}
+	} else if(action == GLFW_RELEASE) {
+		switch (key) {
+			case GLFW_KEY_C:
+				if(cPressed) {
+					cPressed = false;
+				}
+				break;
+			case GLFW_KEY_LEFT:
+				heldStatus &= 0x1110;
+				break;
+			case GLFW_KEY_RIGHT:
+				heldStatus &= 0x1101;
+				break;
+			case GLFW_KEY_UP:
+				heldStatus &= 0x1011;
+				break;
+			case GLFW_KEY_DOWN:
+				heldStatus &= 0x0111;
+				break;
+			default:
+				break;
 		}
 	}
 }
@@ -490,6 +573,8 @@ int main(void) {
 		}
 
 		// DRAWING POINTS
+		if(moveCam)
+			handleArrow();
 		renderScene();
 
 	} // Check if the ESC key was pressed or the window was closed
