@@ -1,5 +1,6 @@
 // Include standard headers
 #include <stdio.h>
+#include <iostream>
 #include <stdlib.h>
 #include <vector>
 #include <array>
@@ -72,7 +73,7 @@ std::string gMessage;
 GLuint programID;
 GLuint pickingProgramID;
 
-const GLuint NumObjects = 1;	// ATTN: THIS NEEDS TO CHANGE AS YOU ADD NEW OBJECTS
+const GLuint NumObjects = 2;	// ATTN: THIS NEEDS TO CHANGE AS YOU ADD NEW OBJECTS
 GLuint VertexArrayId[NumObjects];
 GLuint VertexBufferId[NumObjects];
 GLuint IndexBufferId[NumObjects];
@@ -96,6 +97,9 @@ GLuint LightID;
 const size_t CoordVertsCount = 6;
 Vertex CoordVerts[CoordVertsCount];
 
+Vertex gridVerts[121];
+GLushort gridIndices[440];
+
 int initWindow(void) {
 	// Initialise GLFW
 	if (!glfwInit()) {
@@ -110,7 +114,7 @@ int initWindow(void) {
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);	// FOR MAC
 
 	// Open a window and create its OpenGL context
-	window = glfwCreateWindow(window_width, window_height, "Lastname,FirstName(ufid)", NULL, NULL);
+	window = glfwCreateWindow(window_width, window_height, "Knee,Andrew(39081329)", NULL, NULL);
 	if (window == NULL) {
 		fprintf(stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n");
 		glfwTerminate();
@@ -182,7 +186,13 @@ void initOpenGL(void) {
 	VertexBufferSize[0] = sizeof(CoordVerts);
 	NumVerts[0] = CoordVertsCount;
 
+	VertexBufferSize[1] = sizeof(gridVerts);
+	NumVerts[1] = 121;
+	IndexBufferSize[1] = sizeof(gridIndices);
+	NumIdcs[1] = 440;
+
 	createVAOs(CoordVerts, NULL, 0);
+	createVAOs(gridVerts, gridIndices, 1);
 }
 
 void createVAOs(Vertex Vertices[], unsigned short Indices[], int ObjectId) {
@@ -236,13 +246,13 @@ void loadObject(char* file, glm::vec4 color, Vertex* &out_Vertices, GLushort* &o
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec2> uvs;
 	std::vector<glm::vec3> normals;
-	bool res = loadOBJ(file, vertices, uvs, normals);
+	bool res = loadOBJ(file, vertices, normals);
 
 	std::vector<GLushort> indices;
 	std::vector<glm::vec3> indexed_vertices;
 	std::vector<glm::vec2> indexed_uvs;
 	std::vector<glm::vec3> indexed_normals;
-	indexVBO(vertices, uvs, normals, indices, indexed_vertices, indexed_uvs, indexed_normals);
+	indexVBO(vertices, normals, indices, indexed_vertices, indexed_normals);
 
 	const size_t vertCount = indexed_vertices.size();
 	const size_t idxCount = indices.size();
@@ -277,7 +287,40 @@ void createObjects(void) {
 	//-- GRID --//
 	
 	// ATTN: Create your grid vertices here!
-	
+	for(int z = 0; z <= 10; z++) {
+		for(int x = 0; x <= 10; x++) {
+			gridVerts[x + z * 11] = {{x - 5.0f, 0.0, z - 5.0f, 1.0}, {1.0, 1.0, 1.0, 1.0}, {0.0, 0.0, 1.0}};
+		}
+	}
+
+	int x = -5;
+	int z = -5;
+	for(int index = 0; index < 220;) {
+		if(x == 5) {
+			z++;
+			x = -5;
+		}
+		std::cout << "x: " << x << " z: " << z << std::endl;
+		gridIndices[index++] = (x++ + 5) + (z + 5) * 11;
+		std::cout << "x: " << x << " z: " << z << std::endl;
+		gridIndices[index++] = (x + 5) + (z + 5) * 11;
+		std::cout << index << std::endl;
+	}
+
+	x = -5;
+	z = -5;
+	for(int index = 220; index < 440;) {
+		if(z == 5) {
+			x++;
+			z = -5;
+		}
+		std::cout << "x: " << x << " z: " << z << std::endl;
+		gridIndices[index++] = (x + 5) + (z++ + 5) * 11;
+		std::cout << "x: " << x << " z: " << z << std::endl;
+		gridIndices[index++] = (x + 5) + (z + 5) * 11;
+		std::cout << index << std::endl;
+	}
+
 	//-- .OBJs --//
 
 	// ATTN: Load your models here through .obj files -- example of how to do so is as shown
@@ -358,6 +401,10 @@ void renderScene(void) {
 
 		glBindVertexArray(VertexArrayId[0]);	// Draw CoordAxes
 		glDrawArrays(GL_LINES, 0, NumVerts[0]);
+
+		glBindVertexArray(VertexArrayId[1]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[1]);
+		glDrawElements(GL_LINES, NumIdcs[1], GL_UNSIGNED_SHORT, (void*)0);
 			
 		glBindVertexArray(0);
 	}
