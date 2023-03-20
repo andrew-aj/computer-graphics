@@ -1,4 +1,6 @@
 // Include standard headers
+#include "glm/detail/type_mat.hpp"
+#include "glm/gtx/euler_angles.hpp"
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
@@ -74,7 +76,7 @@ std::string gMessage;
 GLuint programID;
 GLuint pickingProgramID;
 
-const GLuint NumObjects = 3;	// ATTN: THIS NEEDS TO CHANGE AS YOU ADD NEW OBJECTS
+const GLuint NumObjects = 6;	// ATTN: THIS NEEDS TO CHANGE AS YOU ADD NEW OBJECTS
 GLuint VertexArrayId[NumObjects];
 GLuint VertexBufferId[NumObjects];
 GLuint IndexBufferId[NumObjects];
@@ -110,6 +112,34 @@ float phi = 0.79;
 
 bool moveCam = false;
 bool cPressed = false;
+
+glm::vec3 baseToArm1(0, 0.8898, 0);
+glm::vec3 arm1ToJoint(0, 1.537-0.8898, 0);
+glm::vec3 jointToArm2(-.10272, 2.0653-1.537, .31095);
+glm::vec3 arm2Rot(62.3, -9.79, 16.1);
+
+glm::mat4 base(1.0);
+glm::mat4 arm1(1.0);
+glm::mat4 joint(1.0);
+glm::mat4 arm2(1.0);
+
+void setModel(glm::mat4& model, glm::vec3 translate, glm::vec3 rot) {
+	glm::mat4 euler = glm::mat4(1);
+	euler = glm::eulerAngleXYZ(glm::radians(rot.x), glm::radians(rot.y), glm::radians(rot.z));
+	glm::mat4 temp = glm::translate(glm::mat4(), translate) * euler;
+	model = temp * model;
+}
+
+void setModels() {
+	setModel(base, glm::vec3{0, 0, 0}, glm::vec3{0, 0, 0});
+	setModel(arm1, baseToArm1, glm::vec3{0, 0, 0});
+	setModel(joint, baseToArm1, glm::vec3{0, 0, 0});
+	setModel(joint, arm1ToJoint, glm::vec3{0, 0, 0});
+	setModel(arm2, glm::vec3{0,0,0}, arm2Rot);
+	setModel(arm2, jointToArm2, glm::vec3{0, 0, 0});
+	setModel(arm2, arm1ToJoint, glm::vec3{0, 0, 0});
+	setModel(arm2, baseToArm1, glm::vec3{0, 0, 0});
+}
 
 int initWindow(void) {
 	// Initialise GLFW
@@ -200,6 +230,8 @@ void initOpenGL(void) {
 	// TL
 	// Define objects
 	createObjects();
+
+	setModels();
 
 	// ATTN: create VAOs for each of the newly created objects here:
 	VertexBufferSize[0] = sizeof(CoordVerts);
@@ -428,12 +460,26 @@ void renderScene(void) {
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[1]);
 		glDrawElements(GL_LINES, NumIdcs[1], GL_UNSIGNED_SHORT, (void*)0);
 
-		for(int i = 0; i < sizeof(outObjVertices) / sizeof(outObjVertices[0]); i++) {
-			glBindVertexArray(VertexArrayId[i+2]);
-			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i+2]);
-			glDrawElements(GL_TRIANGLES, NumIdcs[i+2], GL_UNSIGNED_SHORT, (void*)0);
-		}
-			
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &base[0][0]);
+		glBindVertexArray(VertexArrayId[2]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[2]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[2], GL_UNSIGNED_SHORT, (void*)0);
+
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm1[0][0]);
+		glBindVertexArray(VertexArrayId[3]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[3]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[3], GL_UNSIGNED_SHORT, (void*)0);
+
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &joint[0][0]);
+		glBindVertexArray(VertexArrayId[4]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm2[0][0]);
+		glBindVertexArray(VertexArrayId[5]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[5]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[5], GL_UNSIGNED_SHORT, (void*)0);
+
 		glBindVertexArray(0);
 	}
 	glUseProgram(0);
