@@ -101,8 +101,8 @@ Vertex CoordVerts[CoordVertsCount];
 Vertex gridVerts[121];
 GLushort gridIndices[440];
 
-Vertex* outObjVertices;
-GLushort* outObjIndices;
+Vertex* outObjVertices[4];
+GLushort* outObjIndices[4];
 
 const float radius = 17.32;
 float theta = 0.96;
@@ -210,10 +210,17 @@ void initOpenGL(void) {
 	IndexBufferSize[1] = sizeof(gridIndices);
 	NumIdcs[1] = 440;
 
+	loadObject((char*)"../models/base.obj", {1.0, 0.0, 0.0, 1.0}, outObjVertices[0], outObjIndices[0], 2);
+	loadObject((char*)"../models/arm1.obj", {0.0, 0.0, 1.0, 1.0}, outObjVertices[1], outObjIndices[1], 3);
+	loadObject((char*)"../models/joint.obj", {1.0, 0.0, 1.0, 1.0}, outObjVertices[2], outObjIndices[2], 4);
+	loadObject((char*)"../models/arm2.obj", {0.0, 0.5, 1.0, 1.0}, outObjVertices[3], outObjIndices[3], 5);
+
 	createVAOs(CoordVerts, NULL, 0);
 	createVAOs(gridVerts, gridIndices, 1);
-	loadObject((char*)"../models/project.obj", {1.0, 0.5, 0.0, 1.0}, outObjVertices, outObjIndices, 2);
-	createVAOs(outObjVertices, outObjIndices, 2);
+	createVAOs(outObjVertices[0], outObjIndices[0], 2);
+	createVAOs(outObjVertices[1], outObjIndices[1], 3);
+	createVAOs(outObjVertices[2], outObjIndices[2], 4);
+	createVAOs(outObjVertices[3], outObjIndices[3], 5);
 }
 
 void createVAOs(Vertex Vertices[], unsigned short Indices[], int ObjectId) {
@@ -421,9 +428,11 @@ void renderScene(void) {
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[1]);
 		glDrawElements(GL_LINES, NumIdcs[1], GL_UNSIGNED_SHORT, (void*)0);
 
-		glBindVertexArray(VertexArrayId[2]);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[2]);
-		glDrawElements(GL_TRIANGLES, NumIdcs[2], GL_UNSIGNED_SHORT, (void*)0);
+		for(int i = 0; i < sizeof(outObjVertices) / sizeof(outObjVertices[0]); i++) {
+			glBindVertexArray(VertexArrayId[i+2]);
+			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[i+2]);
+			glDrawElements(GL_TRIANGLES, NumIdcs[i+2], GL_UNSIGNED_SHORT, (void*)0);
+		}
 			
 		glBindVertexArray(0);
 	}
