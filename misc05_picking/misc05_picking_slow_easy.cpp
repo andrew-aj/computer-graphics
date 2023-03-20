@@ -1,4 +1,5 @@
 // Include standard headers
+#include "glm/detail/type_vec.hpp"
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
@@ -157,7 +158,6 @@ glm::vec3 toCartesian() {
 	val.x = radius * std::sin(phi) * std::cos(theta);
 	val.z = radius * std::sin(phi) * std::sin(theta);
 	val.y = radius * std::cos(phi);
-	std::cout << val.x << " " << val.y << " " << val.z << std::endl;
 	return val;
 }
 
@@ -447,21 +447,34 @@ const float mpi = 3.14159;
 
 uint8_t heldStatus = 0;
 
+glm::vec3 up(0, 1, 0);
+
 void handleArrow() {
 	if(heldStatus & 1) {
 		theta += 0.01;
 	} else if(heldStatus & 2) {
 		theta -= 0.01;
 	} else if(heldStatus & 4) {
-		phi += 0.01;
-	} else if(heldStatus & 8){
 		phi -= 0.01;
+	} else if(heldStatus & 8){
+		phi += 0.01;
 	}
 
-	if(phi < 0)
-		phi = 0.001;
+	if(phi < -mpi)
+		phi = mpi;
 	else if(phi > mpi)
-		phi = mpi - 0.001;
+		phi = -mpi;
+
+	if(phi < 0)
+		up = glm::vec3(0, -1, 0);
+		// phi = 0.001;
+	else if(phi > mpi)
+		up = glm::vec3(0, -1, 0);
+		// phi = mpi - 0.001;
+	else
+		up = glm::vec3(0, 1, 0);
+
+	std::cout << phi << std::endl;
 
 	if(theta < 0)
 		theta = tau;
@@ -471,7 +484,7 @@ void handleArrow() {
 
 	gViewMatrix = glm::lookAt(toCartesian(),	// eye
 		glm::vec3(0.0, 0.0, 0.0),	// center
-		glm::vec3(0.0, 1.0, 0.0));	// up
+		up);	// up
 }
 
 // Alternative way of triggering functions on keyboard events
