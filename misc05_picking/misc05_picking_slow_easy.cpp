@@ -75,7 +75,7 @@ std::string gMessage;
 GLuint programID;
 GLuint pickingProgramID;
 
-const GLuint NumObjects = 2;	// ATTN: THIS NEEDS TO CHANGE AS YOU ADD NEW OBJECTS
+const GLuint NumObjects = 3;	// ATTN: THIS NEEDS TO CHANGE AS YOU ADD NEW OBJECTS
 GLuint VertexArrayId[NumObjects];
 GLuint VertexBufferId[NumObjects];
 GLuint IndexBufferId[NumObjects];
@@ -101,6 +101,9 @@ Vertex CoordVerts[CoordVertsCount];
 
 Vertex gridVerts[121];
 GLushort gridIndices[440];
+
+Vertex* outObjVertices;
+GLushort* outObjIndices;
 
 const float radius = 17.32;
 float theta = 0.96;
@@ -210,6 +213,8 @@ void initOpenGL(void) {
 
 	createVAOs(CoordVerts, NULL, 0);
 	createVAOs(gridVerts, gridIndices, 1);
+	loadObject((char*)"../models/project.obj", {1.0, 0.5, 0.0, 1.0}, outObjVertices, outObjIndices, 2);
+	createVAOs(outObjVertices, outObjIndices, 2);
 }
 
 void createVAOs(Vertex Vertices[], unsigned short Indices[], int ObjectId) {
@@ -416,6 +421,10 @@ void renderScene(void) {
 		glBindVertexArray(VertexArrayId[1]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[1]);
 		glDrawElements(GL_LINES, NumIdcs[1], GL_UNSIGNED_SHORT, (void*)0);
+
+		glBindVertexArray(VertexArrayId[2]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[2]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[2], GL_UNSIGNED_SHORT, (void*)0);
 			
 		glBindVertexArray(0);
 	}
