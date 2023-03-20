@@ -491,8 +491,6 @@ void handleArrow() {
 	else
 		up = glm::vec3(0, 1, 0);
 
-	std::cout << phi << std::endl;
-
 	if(theta < 0)
 		theta = tau;
 	else if(theta > tau)
