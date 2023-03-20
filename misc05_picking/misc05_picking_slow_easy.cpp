@@ -1,5 +1,4 @@
 // Include standard headers
-#include "glm/detail/type_vec.hpp"
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
