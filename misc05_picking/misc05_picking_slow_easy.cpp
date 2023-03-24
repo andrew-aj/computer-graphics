@@ -52,6 +52,13 @@ typedef struct Vertex {
 	}
 };
 
+struct Transform {
+	glm::vec3 transform;
+	glm::vec3 rotation;
+
+	Transform* parent = nullptr;
+};
+
 // function prototypes
 int initWindow(void);
 void initOpenGL(void);
@@ -110,35 +117,53 @@ const float radius = 17.32;
 float theta = 0.96;
 float phi = 0.79;
 
+glm::vec3 basePos(0);
+
 bool moveCam = false;
 bool cPressed = false;
+bool tPressed = false;
+bool rPressed = false;
+
+bool translateBase = false;
+bool rotateBase = false;
+bool rotateArm1 = false;
+bool rotateArm2 = false;
 
 glm::vec3 baseToArm1(0, 0.8898, 0);
 glm::vec3 arm1ToJoint(0, 1.537-0.8898, 0);
 glm::vec3 jointToArm2(-.10272, 2.0653-1.537, .31095);
 glm::vec3 arm2Rot(62.3, -9.79, 16.1);
 
-glm::mat4 base(1.0);
-glm::mat4 arm1(1.0);
-glm::mat4 joint(1.0);
-glm::mat4 arm2(1.0);
+Transform base {{0., 0., 0.}, {0., 0., 0.}};
+Transform arm1 {{0, 0.8898, 0}, {0, 0, 0}, &base};
+Transform joint {{0, 0.6472, 0}, {0,0,0}, &arm1};
+Transform arm2 {{-.10272, 0.5283, 0.31095}, {glm::radians(62.3), glm::radians(-9.79), glm::radians(16.1)}, &joint};
 
-void setModel(glm::mat4& model, glm::vec3 translate, glm::vec3 rot) {
-	glm::mat4 euler = glm::mat4(1);
-	euler = glm::eulerAngleXYZ(glm::radians(rot.x), glm::radians(rot.y), glm::radians(rot.z));
-	glm::mat4 temp = glm::translate(glm::mat4(), translate) * euler;
-	model = temp * model;
+glm::mat4 baseMat(1);
+glm::mat4 arm1Mat(1);
+glm::mat4 jointMat(1);
+glm::mat4 arm2Mat(1);
+
+void reset() {
+	baseMat = glm::mat4(1.0);
+	arm1Mat = glm::mat4(1.0);
+	jointMat = glm::mat4(1.0);
+	arm2Mat = glm::mat4(1.0);
+}
+
+void transform(glm::mat4& model, Transform* curr) {
+	while(curr != nullptr) {
+		glm::quat rot(curr->rotation);
+		model = glm::translate(glm::mat4(1), curr->transform) * glm::toMat4(rot) * model;
+		curr = curr->parent;
+	}
 }
 
 void setModels() {
-	setModel(base, glm::vec3{0, 0, 0}, glm::vec3{0, 0, 0});
-	setModel(arm1, baseToArm1, glm::vec3{0, 0, 0});
-	setModel(joint, baseToArm1, glm::vec3{0, 0, 0});
-	setModel(joint, arm1ToJoint, glm::vec3{0, 0, 0});
-	setModel(arm2, glm::vec3{0,0,0}, arm2Rot);
-	setModel(arm2, jointToArm2, glm::vec3{0, 0, 0});
-	setModel(arm2, arm1ToJoint, glm::vec3{0, 0, 0});
-	setModel(arm2, baseToArm1, glm::vec3{0, 0, 0});
+	transform(baseMat, &base);
+	transform(arm1Mat, &arm1);
+	transform(jointMat, &joint);
+	transform(arm2Mat, &arm2);
 }
 
 int initWindow(void) {
@@ -460,22 +485,22 @@ void renderScene(void) {
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[1]);
 		glDrawElements(GL_LINES, NumIdcs[1], GL_UNSIGNED_SHORT, (void*)0);
 
-		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &base[0][0]);
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &baseMat[0][0]);
 		glBindVertexArray(VertexArrayId[2]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[2]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[2], GL_UNSIGNED_SHORT, (void*)0);
 
-		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm1[0][0]);
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm1Mat[0][0]);
 		glBindVertexArray(VertexArrayId[3]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[3]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[3], GL_UNSIGNED_SHORT, (void*)0);
 
-		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &joint[0][0]);
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &jointMat[0][0]);
 		glBindVertexArray(VertexArrayId[4]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
 
-		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm2[0][0]);
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm2Mat[0][0]);
 		glBindVertexArray(VertexArrayId[5]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[5]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[5], GL_UNSIGNED_SHORT, (void*)0);
@@ -548,6 +573,32 @@ void handleArrow() {
 		up);	// up
 }
 
+void moveBase() {
+	if(heldStatus & 1) {
+		base.transform.z += 0.01;
+	} else if(heldStatus & 2) {
+		base.transform.z -= 0.01;
+	} else if(heldStatus & 4) {
+		base.transform.x -= 0.01;
+	} else if(heldStatus & 8){
+		base.transform.x += 0.01;
+	}
+
+	reset();
+	setModels();
+}
+
+void rotateBaseFunc() {
+	if(heldStatus & 1) {
+		base.rotation.z += 0.01;
+	} else if(heldStatus & 2) {
+		base.rotation.z -= 0.01;
+	}
+
+	reset();
+	setModels();
+}
+
 // Alternative way of triggering functions on keyboard events
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	// ATTN: MODIFY AS APPROPRIATE
@@ -566,6 +617,18 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 			if(!cPressed) {
 				moveCam = !moveCam;
 				cPressed = true;
+			}
+			break;
+		case GLFW_KEY_T:
+			if(!tPressed) {
+				translateBase = !translateBase;
+				tPressed = true;
+			}
+			break;
+		case GLFW_KEY_R:
+			if(!rPressed) {
+				rotateBase = !rotateBase;
+				rPressed = true;
 			}
 			break;
 		case GLFW_KEY_LEFT:
@@ -592,6 +655,16 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 					cPressed = false;
 				}
 				break;
+			case GLFW_KEY_T:
+				if(tPressed) {
+					tPressed = false;
+				}
+				break;
+			case GLFW_KEY_R:
+				if(rPressed) {
+					rPressed = false;
+				}
+			break;
 			case GLFW_KEY_LEFT:
 				heldStatus &= 0x1110;
 				break;
@@ -649,6 +722,8 @@ int main(void) {
 		// DRAWING POINTS
 		if(moveCam)
 			handleArrow();
+		if(translateBase)
+			moveBase();
 		renderScene();
 
 	} // Check if the ESC key was pressed or the window was closed
