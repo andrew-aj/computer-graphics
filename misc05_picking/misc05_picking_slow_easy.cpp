@@ -123,6 +123,8 @@ bool moveCam = false;
 bool cPressed = false;
 bool tPressed = false;
 bool rPressed = false;
+bool onePressed = false;
+bool twoPressed = false;
 
 bool translateBase = false;
 bool rotateBase = false;
@@ -590,9 +592,31 @@ void moveBase() {
 
 void rotateBaseFunc() {
 	if(heldStatus & 1) {
-		base.rotation.z += 0.01;
+		base.rotation.y += 0.01;
 	} else if(heldStatus & 2) {
-		base.rotation.z -= 0.01;
+		base.rotation.y -= 0.01;
+	}
+
+	reset();
+	setModels();
+}
+
+void rotateArm1Func() {
+	if(heldStatus & 4) {
+		arm1.rotation.x += 0.01;
+	} else if(heldStatus & 8) {
+		arm1.rotation.x -= 0.01;
+	}
+
+	reset();
+	setModels();
+}
+
+void rotateArm2Func() {
+	if(heldStatus & 4) {
+		arm2.rotation.x += 0.01;
+	} else if(heldStatus & 8) {
+		arm2.rotation.x -= 0.01;
 	}
 
 	reset();
@@ -631,6 +655,18 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 				rPressed = true;
 			}
 			break;
+		case GLFW_KEY_1:
+			if(!onePressed) {
+				rotateArm1 = !rotateArm1;
+				onePressed = true;
+			}
+			break;
+		case GLFW_KEY_2:
+			if(!twoPressed) {
+				rotateArm2 = !rotateArm2;
+				twoPressed = true;
+			}
+			break;
 		case GLFW_KEY_LEFT:
 			heldStatus |= 1;
 			break;
@@ -663,6 +699,16 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 			case GLFW_KEY_R:
 				if(rPressed) {
 					rPressed = false;
+				}
+			break;
+			case GLFW_KEY_1:
+				if(onePressed) {
+					onePressed = false;
+				}
+				break;
+			case GLFW_KEY_2:
+				if(twoPressed) {
+					twoPressed = false;
 				}
 			break;
 			case GLFW_KEY_LEFT:
@@ -724,6 +770,12 @@ int main(void) {
 			handleArrow();
 		if(translateBase)
 			moveBase();
+		if(rotateBase)
+			rotateBaseFunc();
+		if(rotateArm1)
+			rotateArm1Func();
+		if(rotateArm2)
+			rotateArm2Func();
 		renderScene();
 
 	} // Check if the ESC key was pressed or the window was closed
