@@ -20,4 +20,18 @@ uniform vec3 LightPosition_worldspace;
 
 void main() {
 	color = vs_vertexColor.rgb;
+
+    float ambientStrength = 1;
+	vec3 ambient = ambientStrength * vec3(1.0, 1.0, 1.0);
+
+	vec3 lightDir = normalize(LightDirection_cameraspace);
+	float diff = max(dot(normalize(Normal_cameraspace), lightDir), 0.0);
+	vec3 diffuse = diff * vec3(1.0,1.0,1.0);
+
+	float specularStrength = 0.1;
+	vec3 reflectDir = reflect(-lightDir, normalize(Normal_cameraspace));
+	float spec = pow(max(dot(normalize(EyeDirection_cameraspace), reflectDir), 0.0), 32);
+	vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
+
+	color = (ambient + diffuse + specular) * vs_vertexColor.rgb;
 }
