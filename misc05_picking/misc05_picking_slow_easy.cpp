@@ -99,9 +99,16 @@ GLuint ModelMatrixID;
 GLuint ViewMatrixID;
 GLuint ProjMatrixID;
 GLuint PickingMatrixID;
+GLuint PickingViewID;
+GLuint PickingProjID;
+GLuint pickingColorArrayID;
+GLuint indexID;
 GLuint pickingColorID;
+GLuint picked;
 GLuint LightID;
 GLuint LightID2;
+
+float pickingColor[4];
 
 // Declare global objects
 // TL
@@ -248,13 +255,22 @@ void initOpenGL(void) {
 	ModelMatrixID = glGetUniformLocation(programID, "M");
 	ViewMatrixID = glGetUniformLocation(programID, "V");
 	ProjMatrixID = glGetUniformLocation(programID, "P");
+	picked = glGetUniformLocation(programID, "pickedObj");
 
-	PickingMatrixID = glGetUniformLocation(pickingProgramID, "MVP");
+	PickingMatrixID = glGetUniformLocation(pickingProgramID, "M");
+	PickingViewID = glGetUniformLocation(pickingProgramID, "V");
+	PickingProjID = glGetUniformLocation(pickingProgramID, "P");
+	pickingColorArrayID = glGetUniformLocation(pickingProgramID, "PickingColorArray");
+	indexID = glGetUniformLocation(pickingProgramID, "index");
 	// Get a handle for our "pickingColorID" uniform
 	pickingColorID = glGetUniformLocation(pickingProgramID, "PickingColor");
 	// Get a handle for our "LightPosition" uniform
 	LightID = glGetUniformLocation(programID, "LightPosition_worldspace");
 	LightID2 = glGetUniformLocation(programID, "LightPosition2_worldspace");
+
+	for(int i = 0; i < 4; i++) {
+		pickingColor[i] = i / 255.0;
+	}
 
 	// TL
 	// Define objects
@@ -424,9 +440,36 @@ void pickObject(void) {
 		glm::mat4 MVP = gProjectionMatrix * gViewMatrix * ModelMatrix;
 
 		// Send our transformation to the currently bound shader, in the "MVP" uniform
-		glUniformMatrix4fv(PickingMatrixID, 1, GL_FALSE, &MVP[0][0]);
+		glUniform1fv(pickingColorArrayID, 4, pickingColor);
+		glUniformMatrix4fv(PickingProjID, 1, GL_FALSE, &gProjectionMatrix[0][0]);
+		glUniformMatrix4fv(PickingViewID, 1, GL_FALSE, &gViewMatrix[0][0]);
 
 		// ATTN: DRAW YOUR PICKING SCENE HERE. REMEMBER TO SEND IN A DIFFERENT PICKING COLOR FOR EACH OBJECT BEFOREHAND
+
+		glUniform1i(indexID, 0);
+		glUniformMatrix4fv(PickingMatrixID, 1, GL_FALSE, &baseMat[0][0]);
+		glBindVertexArray(VertexArrayId[2]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[2]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[2], GL_UNSIGNED_SHORT, (void*)0);
+
+		glUniform1i(indexID, 1);
+		glUniformMatrix4fv(PickingMatrixID, 1, GL_FALSE, &arm1Mat[0][0]);
+		glBindVertexArray(VertexArrayId[3]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[3]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[3], GL_UNSIGNED_SHORT, (void*)0);
+
+		glUniform1i(indexID, 2);
+		glUniformMatrix4fv(PickingMatrixID, 1, GL_FALSE, &jointMat[0][0]);
+		glBindVertexArray(VertexArrayId[4]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+
+		glUniform1i(indexID, 3);
+		glUniformMatrix4fv(PickingMatrixID, 1, GL_FALSE, &arm2Mat[0][0]);
+		glBindVertexArray(VertexArrayId[5]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[5]);
+		glDrawElements(GL_TRIANGLES, NumIdcs[5], GL_UNSIGNED_SHORT, (void*)0);
+
 		glBindVertexArray(0);
 	}
 	glUseProgram(0);
@@ -461,8 +504,8 @@ void pickObject(void) {
 	}
 
 	// Uncomment these lines to see the picking shader in effect
-	//glfwSwapBuffers(window);
-	//continue; // skips the normal rendering
+	// glfwSwapBuffers(window);
+	// continue; // skips the normal rendering
 }
 
 void renderScene(void) {
@@ -476,13 +519,14 @@ void renderScene(void) {
 	glUseProgram(programID);
 	{
 		glm::vec3 lightPos = glm::vec3(4, 4, 4);
-		glm::vec3 lightPos2 = glm::vec3(0, 0, 10);
+		glm::vec3 lightPos2 = glm::vec3(-4, 4, 4);
 		glm::mat4x4 ModelMatrix = glm::mat4(1.0);
 		glUniform3f(LightID, lightPos.x, lightPos.y, lightPos.z);
 		glUniform3f(LightID2, lightPos2.x, lightPos2.y, lightPos2.z);
 		glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
 		glUniformMatrix4fv(ProjMatrixID, 1, GL_FALSE, &gProjectionMatrix[0][0]);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
+		glUniform1i(picked, (int)false);
 
 		glBindVertexArray(VertexArrayId[0]);	// Draw CoordAxes
 		glDrawArrays(GL_LINES, 0, NumVerts[0]);
@@ -491,25 +535,37 @@ void renderScene(void) {
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[1]);
 		glDrawElements(GL_LINES, NumIdcs[1], GL_UNSIGNED_SHORT, (void*)0);
 
+		if(gPickedIndex == 0)
+			glUniform1i(picked, (int)true);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &baseMat[0][0]);
 		glBindVertexArray(VertexArrayId[2]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[2]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[2], GL_UNSIGNED_SHORT, (void*)0);
+		glUniform1i(picked, (int)false);
 
+		if(gPickedIndex == 1)
+			glUniform1i(picked, (int)true);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm1Mat[0][0]);
 		glBindVertexArray(VertexArrayId[3]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[3]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[3], GL_UNSIGNED_SHORT, (void*)0);
+		glUniform1i(picked, (int)false);
 
+		if(gPickedIndex == 2)
+			glUniform1i(picked, (int)true);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &jointMat[0][0]);
 		glBindVertexArray(VertexArrayId[4]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[4]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[4], GL_UNSIGNED_SHORT, (void*)0);
+		glUniform1i(picked, (int)false);
 
+		if(gPickedIndex == 3)
+			glUniform1i(picked, (int)true);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &arm2Mat[0][0]);
 		glBindVertexArray(VertexArrayId[5]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferId[5]);
 		glDrawElements(GL_TRIANGLES, NumIdcs[5], GL_UNSIGNED_SHORT, (void*)0);
+		glUniform1i(picked, (int)false);
 
 		glBindVertexArray(0);
 	}
@@ -737,6 +793,8 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 static void mouseCallback(GLFWwindow* window, int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		pickObject();
+	} else if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+		gPickedIndex = -1;
 	}
 }
 
