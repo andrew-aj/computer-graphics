@@ -101,6 +101,7 @@ GLuint ProjMatrixID;
 GLuint PickingMatrixID;
 GLuint pickingColorID;
 GLuint LightID;
+GLuint LightID2;
 
 // Declare global objects
 // TL
@@ -253,6 +254,7 @@ void initOpenGL(void) {
 	pickingColorID = glGetUniformLocation(pickingProgramID, "PickingColor");
 	// Get a handle for our "LightPosition" uniform
 	LightID = glGetUniformLocation(programID, "LightPosition_worldspace");
+	LightID2 = glGetUniformLocation(programID, "LightPosition2_worldspace");
 
 	// TL
 	// Define objects
@@ -474,8 +476,10 @@ void renderScene(void) {
 	glUseProgram(programID);
 	{
 		glm::vec3 lightPos = glm::vec3(4, 4, 4);
+		glm::vec3 lightPos2 = glm::vec3(0, 0, 10);
 		glm::mat4x4 ModelMatrix = glm::mat4(1.0);
 		glUniform3f(LightID, lightPos.x, lightPos.y, lightPos.z);
+		glUniform3f(LightID2, lightPos2.x, lightPos2.y, lightPos2.z);
 		glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &gViewMatrix[0][0]);
 		glUniformMatrix4fv(ProjMatrixID, 1, GL_FALSE, &gProjectionMatrix[0][0]);
 		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);

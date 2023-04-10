@@ -6,6 +6,7 @@ in vec3 Position_worldspace;
 in vec3 Normal_cameraspace;
 in vec3 EyeDirection_cameraspace;
 in vec3 LightDirection_cameraspace;
+in vec3 LightDirection2_worldspace;
 
 // Ouput data
 out vec3 color;
@@ -33,5 +34,17 @@ void main() {
 	float spec = pow(max(dot(normalize(EyeDirection_cameraspace), reflectDir), 0.0), 32);
 	vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
 
-	color = (ambient + diffuse + specular) * vs_vertexColor.rgb;
+    ambientStrength = 0.2;
+	vec3 ambient2 = ambientStrength * vec3(1.0, 0.0, 1.0);
+
+	vec3 lightDir2 = normalize(LightDirection2_worldspace);
+	diff = max(dot(normalize(Normal_cameraspace), lightDir2), 0.0);
+	vec3 diffuse2 = diff * vec3(1.0,1.0,1.0);
+
+	specularStrength = 0.05;
+	reflectDir = reflect(-lightDir2, normalize(Normal_cameraspace));
+	spec = pow(max(dot(normalize(EyeDirection_cameraspace), reflectDir), 0.0), 32);
+	vec3 specular2 = specularStrength * spec * vec3(1.0, 1.0, 1.0);
+
+	color = (ambient + diffuse + specular + ambient2 + diffuse2 + specular2) * vs_vertexColor.rgb;
 }
