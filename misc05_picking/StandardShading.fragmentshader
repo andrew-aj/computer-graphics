@@ -2,54 +2,24 @@
 
 // Interpolated values from the vertex shaders
 in vec4 vs_vertexColor;
-in vec3 Position_worldspace;
-in vec3 Normal_cameraspace;
-in vec3 EyeDirection_cameraspace;
-in vec3 LightDirection_cameraspace;
-in vec3 LightDirection2_worldspace;
-flat in int picked;
+in vec2 uv;
+flat in int useTex;
 
 // Ouput data
-out vec3 color;
+out vec4 color;
 
 // Values that stay constant for the whole mesh.
-uniform mat4 MV;
-uniform vec3 LightPosition_worldspace;
+uniform sampler2D image;
 
 // TL
 // ATTN: Refer to https://learnopengl.com/Lighting/Colors and https://learnopengl.com/Lighting/Basic-Lighting
 // to familiarize yourself with implementing basic lighting model in OpenGL shaders
 
 void main() {
-	color = vs_vertexColor.rgb;
-    if(picked == 1) {
-        color = vec3(1.0, 1.0, 1.0);
-        return;
+	//color = vs_vertexColor.rgb;
+    if(useTex == 1) {
+        color = texture(image, uv);
+    } else {
+        color = vs_vertexColor;
     }
-
-    float ambientStrength = 0.5;
-	vec3 ambient = ambientStrength * vec3(1.0, 0.0, 0.0);
-
-	vec3 lightDir = normalize(LightDirection_cameraspace);
-	float diff = max(dot(normalize(Normal_cameraspace), lightDir), 0.0);
-	vec3 diffuse = diff * vec3(1.0,1.0,1.0);
-
-	float specularStrength = 0.05;
-	vec3 reflectDir = reflect(-lightDir, normalize(Normal_cameraspace));
-	float spec = pow(max(dot(normalize(EyeDirection_cameraspace), reflectDir), 0.0), 32);
-	vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
-
-    ambientStrength = 0.5;
-	vec3 ambient2 = ambientStrength * vec3(0.0, 1.0, 0.0);
-
-	vec3 lightDir2 = normalize(LightDirection2_worldspace);
-	diff = max(dot(normalize(Normal_cameraspace), lightDir2), 0.0);
-	vec3 diffuse2 = diff * vec3(0.0,1.0,0.0);
-
-	specularStrength = 0.05;
-	reflectDir = reflect(-lightDir2, normalize(Normal_cameraspace));
-	spec = pow(max(dot(normalize(EyeDirection_cameraspace), reflectDir), 0.0), 32);
-	vec3 specular2 = specularStrength * spec * vec3(0.0, 1.0, 0.0);
-
-	color = (ambient + diffuse + specular + ambient2 + diffuse2 + specular2) * vs_vertexColor.rgb;
 }

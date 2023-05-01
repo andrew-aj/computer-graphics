@@ -4,51 +4,29 @@
 layout(location = 0) in vec4 vertexPosition_modelspace;
 layout(location = 1) in vec4 vertexColor;
 layout(location = 2) in vec3 vertexNormal;	// TL
+layout(location = 3) in vec2 vertexUV;
 
 // Output data; will be interpolated for each fragment.
 out vec4 vs_vertexColor;
-out vec3 Position_worldspace;
-out vec3 Normal_cameraspace;
-out vec3 EyeDirection_cameraspace;
-out vec3 LightDirection_cameraspace;
-out vec3 LightDirection2_worldspace;
-flat out int picked;
+out vec2 uv;
+flat out int useTex;
 
 // Values that stay constant for the whole mesh.
 uniform mat4 M;
 uniform mat4 V;
 uniform mat4 P;
-uniform bool pickedObj;
-uniform vec3 LightPosition_worldspace;
-uniform vec3 LightPosition2_worldspace;
+uniform bool useTexture;
 
 void main() {
 	gl_PointSize = 10.0;
 	// Output position of the vertex, in clip space : MVP * position
 	gl_Position =  P * V * M * vertexPosition_modelspace;
 	
-	// Position of the vertex, in worldspace : M * position
-	Position_worldspace = (M * vertexPosition_modelspace).xyz;
-	
-	// Vector that goes from the vertex to the camera, in camera space.
-	// In camera space, the camera is at the origin (0,0,0).
-	vec3 vertexPosition_cameraspace = (M * vertexPosition_modelspace).xyz;
-	EyeDirection_cameraspace = vec3(0,0,0) - vertexPosition_cameraspace;
-
-	// Vector that goes from the vertex to the light, in camera space. M is ommited because it's identity.
-	vec3 LightPosition_cameraspace = (vec4(LightPosition_worldspace, 1.0)).xyz;
-	LightDirection_cameraspace = LightPosition_worldspace + EyeDirection_cameraspace;
-    LightDirection2_worldspace = LightPosition2_worldspace + EyeDirection_cameraspace;
-	
-	// Normal of the the vertex, in camera space	// TL
-	Normal_cameraspace = (M * vec4(vertexNormal, 1.0)).xyz; // Only correct if ModelMatrix does not scale the model ! Use its inverse transpose if not.
-	
-	// UV of the vertex. No special space for this one.
-    if(pickedObj) {
-        picked = 1;
-    } else {
-        picked = 0;
-    }
 	vs_vertexColor = vertexColor;
+    uv = vertexUV;
+    if(useTexture) {
+         useTex = 1;
+    } else {
+         useTex = 0;
+    }
 }
-
